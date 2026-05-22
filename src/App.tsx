@@ -3,6 +3,7 @@ import { audienceLabel, mockPosts, mockReplies, mockUsers, visibilityDescription
 
 type Screen = 'home' | 'compose' | 'detail' | 'profile' | 'search' | 'settings'
 type Theme = 'dark' | 'light' | 'system'
+type ProfileTab = 'posts' | 'replies' | 'audio' | 'saved'
 
 export function App() {
   const [screen, setScreen] = useState<Screen>('home')
@@ -12,9 +13,46 @@ export function App() {
   const [isRecording, setIsRecording] = useState(false)
   const [activeAudioId, setActiveAudioId] = useState<string | null>(null)
   const [savedPostIds, setSavedPostIds] = useState<string[]>([])
+  const [likedPostIds, setLikedPostIds] = useState<string[]>([])
   const [theme, setTheme] = useState<Theme>('dark')
+  const [profileTab, setProfileTab] = useState<ProfileTab>('posts')
 
   const selectedPost = useMemo(() => mockPosts.find((post) => post.id === selectedPostId) ?? mockPosts[0], [selectedPostId])
+
+  const renderTimelinePost = (post: (typeof mockPosts)[number], compact = false) => (
+    <article key={post.id} className="tweet-item" role="button">
+      <div className="tweet-avatar">{post.displayName.slice(0, 1)}</div>
+      <div className="tweet-content">
+        <div className="tweet-header">
+          <strong>{post.displayName}</strong>
+          <span>{post.userId}</span>
+          <span>·</span>
+          <time>{post.createdAt}</time>
+        </div>
+        <p className="tweet-text">{post.text}</p>
+        {post.audio && (
+          <button className={`audio-card ${activeAudioId === post.id ? 'audio-active' : ''}`} onClick={() => setActiveAudioId(activeAudioId === post.id ? null : post.id)}>
+            <span>{activeAudioId === post.id ? '⏸ 再生中' : '▶ 再生する'}</span>
+            <span className="wave" />
+            <span>{post.audio.duration}</span>
+          </button>
+        )}
+        {!compact && (
+          <div className="delivery-inline">
+            <span className="pill safe">{visibilityOptions[post.visibility]}</span>
+            <small>この声は「{audienceLabel[post.visibility]}」に届きます</small>
+          </div>
+        )}
+        <div className="action-row">
+          <button className="icon-btn" onClick={() => { setSelectedPostId(post.id); setScreen('detail') }}>💬</button>
+          <button className="icon-btn">🔁</button>
+          <button className={`icon-btn ${likedPostIds.includes(post.id) ? 'active-icon' : ''}`} onClick={() => setLikedPostIds((prev) => prev.includes(post.id) ? prev.filter((id) => id !== post.id) : [...prev, post.id])}>♡</button>
+          <button className={`icon-btn ${savedPostIds.includes(post.id) ? 'active-icon' : ''}`} onClick={() => setSavedPostIds((prev) => prev.includes(post.id) ? prev.filter((id) => id !== post.id) : [...prev, post.id])}>🔖</button>
+          <button className="icon-btn">↗</button>
+        </div>
+      </div>
+    </article>
+  )
 
   return (
     <div className={`app-shell theme-${theme === 'system' ? 'dark' : theme}`}>
@@ -26,29 +64,8 @@ export function App() {
         {screen === 'home' && (
           <section>
             <h2>ホーム</h2>
-            <p className="intro-copy">数字より、関係性を大切に。あなたが選んだ人にだけ届く場所。</p>
-            {mockPosts.map((post) => (
-              <article key={post.id} className="post-card glass-soft">
-                <div className="row between meta-row"><strong>{post.displayName}</strong><span>{post.userId} · {post.time}</span></div>
-                <p className="absolute-time">{post.createdAt}</p>
-                <p>{post.text}</p>
-                {post.audio && (
-                  <button className={`audio-card ${activeAudioId === post.id ? 'audio-active' : ''}`} onClick={() => setActiveAudioId(activeAudioId === post.id ? null : post.id)}>
-                    <span>{activeAudioId === post.id ? '⏸ 再生中' : '▶ 再生する'}</span>
-                    <span className="wave" />
-                    <span>{post.audio.duration}</span>
-                  </button>
-                )}
-                <div className="delivery-box">
-                  <span className="pill safe">{visibilityOptions[post.visibility]}</span>
-                  <small>この声は「{audienceLabel[post.visibility]}」に届きます</small>
-                </div>
-                <div className="row between">
-                  <button className={`save-btn ${savedPostIds.includes(post.id) ? 'saved' : ''}`} onClick={() => setSavedPostIds((prev) => prev.includes(post.id) ? prev.filter((id) => id !== post.id) : [...prev, post.id])}>{savedPostIds.includes(post.id) ? '★ 保存済み' : '☆ あとで聴く'}</button>
-                  <button onClick={() => { setSelectedPostId(post.id); setScreen('detail') }}>返信</button>
-                </div>
-              </article>
-            ))}
+            <p className="intro-copy">バズらない。だから、本音で話せる。</p>
+            <div className="timeline-list">{mockPosts.map((post) => renderTimelinePost(post))}</div>
             <button className="fab" onClick={() => setScreen('compose')}>＋</button>
           </section>
         )}
@@ -78,7 +95,7 @@ export function App() {
         {screen === 'detail' && (
           <section>
             <h2>投稿詳細</h2>
-            <article className="post-card glass-soft"><strong>{selectedPost.displayName}</strong><p className="absolute-time">{selectedPost.createdAt}</p><p>{selectedPost.text}</p></article>
+            <div className="timeline-list">{renderTimelinePost(selectedPost, true)}</div>
             {mockReplies[selectedPost.id]?.map((reply) => <article key={reply.id} className="reply-card"><div className='row between'><strong>{reply.user}</strong><small>{reply.createdAt}</small></div><p>{reply.text}</p>{reply.audio && <span className="pill">音声返信</span>}</article>)}
             <textarea placeholder="返信を入力" />
             <button>🎙 音声返信</button>
@@ -87,15 +104,23 @@ export function App() {
 
         {screen === 'profile' && (
           <section>
-            <h2>声のプロフィール</h2>
-            <article className="profile-card glass-soft">
-              <div className="avatar" />
+            <div className="profile-header-area" />
+            <article className="profile-block">
+              <div className="avatar">い</div>
+              <button className="profile-action" onClick={() => setScreen('compose')}>声で投稿</button>
               <strong>{mockUsers[0].name}</strong><p>{mockUsers[0].id}</p><p>{mockUsers[0].bio}</p>
               <p>{mockUsers[0].follows} フォロー · {mockUsers[0].followers} フォロワー</p>
+              <p className="intro-copy">声のプロフィール: はじめましてを、声で伝える。</p>
               <div className="audio-preview pinned"><span>固定自己紹介音声</span><span className="wave" /></div>
+              <button onClick={() => setScreen('compose')}>自己紹介を録る</button>
             </article>
-            <h3>過去の投稿タイムライン</h3>
-            {mockPosts.map((post) => <article key={post.id} className="reply-card"><div className='row between'><strong>{post.text.slice(0, 20)}...</strong><small>{post.createdAt}</small></div><p>{post.text}</p></article>)}
+            <div className="tabs">
+              <button className={profileTab === 'posts' ? 'active-tab' : ''} onClick={() => setProfileTab('posts')}>投稿</button>
+              <button className={profileTab === 'replies' ? 'active-tab' : ''} onClick={() => setProfileTab('replies')}>返信</button>
+              <button className={profileTab === 'audio' ? 'active-tab' : ''} onClick={() => setProfileTab('audio')}>音声</button>
+              <button className={profileTab === 'saved' ? 'active-tab' : ''} onClick={() => setProfileTab('saved')}>保存</button>
+            </div>
+            <div className="timeline-list">{mockPosts.filter((post) => profileTab !== 'saved' || savedPostIds.includes(post.id)).map((post) => renderTimelinePost(post))}</div>
           </section>
         )}
 
