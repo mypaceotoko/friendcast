@@ -229,3 +229,16 @@ button { cursor: pointer; }
 .global-fab { z-index: 70; }
 .screen section:last-child { padding-bottom: calc(120px + env(safe-area-inset-bottom)); }
 .compose-screen .compose-post-btn { position: relative; z-index: 95; }
+
+.post-delete-btn{width:auto;min-width:44px;min-height:44px;padding:8px 12px;border-radius:12px;border:1px solid #d4b5c7;background:#fff0f6!important;color:#9f2453!important;font-size:12px;font-weight:700;}
+.inline-error{margin:4px 0 0;color:#b4234d;font-size:12px;font-weight:600;}
+.compose-status-message{margin:8px 0 0;color:#40567f;font-size:13px;font-weight:600;}
+.audio-play{min-width:44px;min-height:44px;}
+.audio-card.is-active{box-shadow:0 0 0 2px rgba(103,75,181,.22);}
+.audio-wave.playing i{animation:playing-wave 1s ease-in-out infinite;}
+@keyframes playing-wave{0%,100%{transform:scaleY(.5)}50%{transform:scaleY(1.05)}}
+.audio-playing-label{font-size:11px;color:#674bb5;font-weight:700;}
+.bottom-nav button,.global-fab,.compose-cancel,.record-fab,.compose-post-btn,.tweet-avatar,.author-link{min-height:44px;}
+.bottom-nav{padding-bottom:calc(14px + env(safe-area-inset-bottom));}
+.global-fab{bottom:calc(112px + env(safe-area-inset-bottom));}
+.compose-sticky-action{padding-bottom:calc(18px + env(safe-area-inset-bottom));}
