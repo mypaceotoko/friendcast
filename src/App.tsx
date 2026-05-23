@@ -5,6 +5,20 @@ type Screen = 'home' | 'compose' | 'detail' | 'profile' | 'search' | 'settings'
 type Theme = 'dark' | 'light' | 'system'
 type ProfileTab = 'posts' | 'replies' | 'audio' | 'saved'
 
+const visibilityIcons: Record<Visibility, string> = {
+  followers: '👥',
+  close_friends: '🤝',
+  specific: '⚙️',
+  private: '🔒',
+}
+
+const visibilityComposeLabel: Record<Visibility, string> = {
+  followers: 'フォロワー',
+  close_friends: '親しい友達',
+  specific: 'カスタム',
+  private: '自分のみ',
+}
+
 export function App() {
   const [screen, setScreen] = useState<Screen>('home')
   const [selectedPostId, setSelectedPostId] = useState(mockPosts[0].id)
@@ -71,24 +85,52 @@ export function App() {
         )}
 
         {screen === 'compose' && (
-          <section>
-            <h2>投稿作成</h2>
-            <p className="intro-copy">文章でも、声でもはじめられる。</p>
-            <textarea maxLength={140} value={composeText} onChange={(e) => setComposeText(e.target.value)} placeholder="短い文章からでも、声からでもどうぞ" />
-            <div className="row between"><small>{composeText.length}/140</small><small>この声は、あなたが選んだ人にだけ届きます。</small></div>
-            <button className={`record-btn ${isRecording ? 'recording' : ''}`} onClick={() => setIsRecording(!isRecording)}>{isRecording ? '録音中...タップで停止' : '🎙 声で話してみる'}</button>
-            <div className="audio-preview glass-soft"><span>録音プレビュー</span><span className="wave" /></div>
-            <label>公開範囲を確認</label>
-            <div className="visibility-grid">
-              {(Object.keys(visibilityOptions) as Visibility[]).map((key) => (
-                <button key={key} className={`visibility-item ${composeVisibility === key ? 'selected' : ''}`} onClick={() => setComposeVisibility(key)}>
-                  <strong>{visibilityOptions[key]}</strong>
-                  <small>{visibilityDescriptions[key]}</small>
-                </button>
-              ))}
+          <section className="compose-screen">
+            <header className="compose-topbar">
+              <button className="compose-cancel" onClick={() => setScreen('home')}>キャンセル</button>
+              <button className="compose-close" aria-label="閉じる" onClick={() => setScreen('home')}>×</button>
+            </header>
+
+            <div className="compose-input-row">
+              <div className="compose-avatar">い</div>
+              <div className="compose-input-wrap">
+                <textarea
+                  maxLength={140}
+                  value={composeText}
+                  onChange={(e) => setComposeText(e.target.value)}
+                  placeholder="いまどうしてる？"
+                  className="compose-textarea"
+                />
+              </div>
             </div>
+
+            <div className="compose-counter">{composeText.length} / 140</div>
+
+            <article className="record-card">
+              <div className={`record-waveform ${isRecording ? 'live' : ''}`}>
+                {Array.from({ length: 12 }).map((_, i) => <span key={i} className="record-bar" />)}
+              </div>
+              <button className={`record-fab ${isRecording ? 'recording' : ''}`} onClick={() => setIsRecording(!isRecording)}>
+                🎙
+              </button>
+              <p>{isRecording ? '録音中... タップして停止' : 'タップして録音を開始'}</p>
+            </article>
+
+            <button className="post-btn compose-post-btn">投稿する</button>
+
+            <div className="compose-visibility-area">
+              <p className="compose-visibility-label">公開範囲</p>
+              <div className="visibility-grid compose-visibility-grid">
+                {(Object.keys(visibilityOptions) as Visibility[]).map((key) => (
+                  <button key={key} className={`visibility-item compose-visibility-item ${composeVisibility === key ? 'selected' : ''}`} onClick={() => setComposeVisibility(key)}>
+                    <span className="visibility-left"><span className="visibility-icon">{visibilityIcons[key]}</span><span><strong>{visibilityComposeLabel[key]}</strong><small>{visibilityDescriptions[key]}</small></span></span>
+                    <span className="visibility-mark">{composeVisibility === key ? '✓' : '○'}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <p className="confirm-line">この投稿は「{audienceLabel[composeVisibility]}」に届きます。</p>
-            <button className="post-btn">投稿する</button>
           </section>
         )}
 
