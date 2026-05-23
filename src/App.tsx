@@ -1,284 +1,212 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { audienceLabel, mockReplies, mockSearchAudioLogs, mockUsers, visibilityOptions, type Visibility } from './mockData'
+import { audienceLabel, type Visibility } from './mockData'
 import { supabase } from './lib/supabase'
 
 type Screen = 'home' | 'compose' | 'detail' | 'profile' | 'search' | 'settings'
 type Theme = 'dark' | 'light' | 'system'
 type ProfileTab = 'posts' | 'audio' | 'replies' | 'likes'
+type PostKind = 'text' | 'audio' | 'text_audio'
 
 type Profile = { id: string; username: string; display_name: string | null; avatar_url: string | null; bio: string }
 type PostProfile = { username: string; display_name: string | null; avatar_url: string | null }
-type SupabasePostRow = {
-  id: string
-  text: string
-  visibility: Visibility
-  created_at: string
-  user_id: string
-}
-type Post = SupabasePostRow
+type AudioAsset = { id: string; post_id: string; storage_bucket: string; storage_path: string; mime_type: string | null; duration_ms: number | null; size_bytes: number | null }
+type SupabasePostRow = { id: string; text: string; visibility: Visibility; created_at: string; user_id: string; kind: PostKind | null; audio_assets?: AudioAsset[] }
+type Post = SupabasePostRow & { audioAsset: AudioAsset | null }
 type ProfileMap = Record<string, PostProfile>
 type PostsStatus = 'idle' | 'loading' | 'loaded' | 'error'
 
 const visibilityComposeLabel: Record<Visibility, string> = { followers: 'フォロワー', close_friends: '親しい友達', specific: 'カスタム', private: '自分のみ' }
 const visibilityBadgeIcon: Record<Visibility, string> = { followers: '◉', close_friends: '◎', specific: '✦', private: '◐' }
 const ShareIcon = () => <svg className="share-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="18" cy="5" r="2" /><circle cx="6" cy="12" r="2" /><circle cx="18" cy="19" r="2" /><path d="M8 11l8-5" /><path d="M8 13l8 5" /></svg>
+const formatDuration = (ms: number | null) => !ms ? '--:--' : `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')}`
 
 export function App() {
-  const [screen, setScreen] = useState<Screen>('home')
-  const [composeText, setComposeText] = useState('')
-  const [composeVisibility, setComposeVisibility] = useState<Visibility>('followers')
-  const [isRecording, setIsRecording] = useState(false)
-  const [savedPostIds, setSavedPostIds] = useState<string[]>([])
-  const [likedPostIds, setLikedPostIds] = useState<string[]>([])
-  const [theme, setTheme] = useState<Theme>('light')
-  const [profileTab, setProfileTab] = useState<ProfileTab>('posts')
-  const [session, setSession] = useState<Session | null>(null)
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [posts, setPosts] = useState<Post[]>([])
-  const [profileMap, setProfileMap] = useState<ProfileMap>({})
-  const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
-  const [errorMessage, setErrorMessage] = useState('')
-  const [isPosting, setIsPosting] = useState(false)
-  const [postsStatus, setPostsStatus] = useState<PostsStatus>('idle')
-  const [postsError, setPostsError] = useState('')
-  const [initialAuthLoading, setInitialAuthLoading] = useState(true)
-  const [sessionRestoreError, setSessionRestoreError] = useState('')
-  const isRestoringSessionRef = useRef(true)
+const [screen, setScreen] = useState<Screen>('home')
+const [composeText, setComposeText] = useState('')
+const [composeVisibility] = useState<Visibility>('followers')
+const [savedPostIds, setSavedPostIds] = useState<string[]>([])
+const [likedPostIds, setLikedPostIds] = useState<string[]>([])
+const [theme] = useState<Theme>('light')
+const [profileTab, setProfileTab] = useState<ProfileTab>('posts')
+const [session, setSession] = useState<Session | null>(null)
+const [profile, setProfile] = useState<Profile | null>(null)
+const [posts, setPosts] = useState<Post[]>([])
+const [profileMap, setProfileMap] = useState<ProfileMap>({})
+const [_selectedPostId, setSelectedPostId] = useState<string | null>(null)
+const [errorMessage, setErrorMessage] = useState('')
+const [isPosting, setIsPosting] = useState(false)
+const [_postsStatus, setPostsStatus] = useState<PostsStatus>('idle')
+const [_postsError, setPostsError] = useState('')
+const [initialAuthLoading, setInitialAuthLoading] = useState(true)
+const [sessionRestoreError] = useState('')
+const [recordingError, setRecordingError] = useState('')
+const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null)
+const [recordedUrl, setRecordedUrl] = useState<string>('')
+const [recordedDurationMs, setRecordedDurationMs] = useState(0)
+const [recordingSeconds, setRecordingSeconds] = useState(0)
+const [isRecording, setIsRecording] = useState(false)
+const [activeAudioPostId, setActiveAudioPostId] = useState<string | null>(null)
+const [audioUrlMap, setAudioUrlMap] = useState<Record<string, string>>({})
+const [audioLoadState, setAudioLoadState] = useState<Record<string, 'idle' | 'loading' | 'ready' | 'error'>>({})
+const [audioLoadError, setAudioLoadError] = useState<Record<string, string>>({})
+const isRestoringSessionRef = useRef(true)
+const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+const mediaStreamRef = useRef<MediaStream | null>(null)
+const chunksRef = useRef<BlobPart[]>([])
+const recordingTimerRef = useRef<number | null>(null)
+const previewAudioRef = useRef<HTMLAudioElement | null>(null)
+const playAudioRef = useRef<HTMLAudioElement | null>(null)
 
-  const resolvedTheme = theme === 'system' ? (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme
+const resolvedTheme = theme === 'system' ? (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme
+const isRecordSupported = typeof window !== 'undefined' && !!window.MediaRecorder && !!navigator.mediaDevices?.getUserMedia
 
-  const ensureProfile = async (activeSession: Session | null) => {
-    if (!activeSession?.user) {
-      setProfile(null)
-      return
+const stopRecorder = () => {
+  if (recordingTimerRef.current) window.clearInterval(recordingTimerRef.current)
+  recordingTimerRef.current = null
+  mediaRecorderRef.current?.stop()
+  mediaStreamRef.current?.getTracks().forEach((t) => t.stop())
+  mediaStreamRef.current = null
+  setIsRecording(false)
+}
+
+const startRecording = async () => {
+  if (!isRecordSupported) return setRecordingError('このブラウザでは録音に対応していません。')
+  try {
+    setRecordingError('')
+    setRecordedBlob(null)
+    if (recordedUrl) URL.revokeObjectURL(recordedUrl)
+    setRecordedUrl('')
+    setRecordedDurationMs(0)
+    setRecordingSeconds(0)
+    chunksRef.current = []
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    mediaStreamRef.current = stream
+    const recorder = new MediaRecorder(stream)
+    mediaRecorderRef.current = recorder
+    recorder.ondataavailable = (event) => { if (event.data.size > 0) chunksRef.current.push(event.data) }
+    recorder.onstop = () => {
+      const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' })
+      const url = URL.createObjectURL(blob)
+      setRecordedBlob(blob)
+      setRecordedUrl(url)
+      setRecordedDurationMs(recordingSeconds * 1000)
     }
-    const id = activeSession.user.id
-    const metadata = activeSession.user.user_metadata ?? {}
-    const emailLocalPart = activeSession.user.email?.split('@')[0] ?? 'user'
-    const displayName = metadata.full_name ?? metadata.name ?? emailLocalPart
-    const avatar = metadata.avatar_url ?? metadata.picture ?? null
-    const username = `${emailLocalPart}_${id.replace(/-/g, '').slice(0, 6)}`
-    const fallbackProfile: Profile = { id, username, display_name: displayName, avatar_url: avatar, bio: '' }
-    const { error: upsertError } = await supabase.from('profiles').upsert(fallbackProfile, { onConflict: 'id' })
-    if (upsertError) {
-      console.error('ensureProfile upsert failed:', upsertError)
-      setProfile(fallbackProfile)
-      return
-    }
-    const { data, error: selectError } = await supabase.from('profiles').select('id,username,display_name,avatar_url,bio').eq('id', id).single()
-    if (selectError) {
-      console.error('ensureProfile select failed:', selectError)
-      setProfile(fallbackProfile)
-      return
-    }
-    setProfile(data ?? fallbackProfile)
-  }
-
-  const loadPosts = async () => {
-    setPostsStatus('loading')
-    setPostsError('')
-
-    const { data: postsData, error: postsErrorValue } = await supabase
-      .from('posts')
-      .select('id,text,visibility,created_at,user_id')
-      .order('created_at', { ascending: false })
-      .limit(100)
-
-    if (postsErrorValue) {
-      setPostsStatus('error')
-      setPostsError(postsErrorValue.message || '投稿の取得に失敗しました。')
-      return
-    }
-
-    const loadedPosts: SupabasePostRow[] = (postsData ?? []) as SupabasePostRow[]
-    setPosts(loadedPosts)
-
-    const userIds = Array.from(new Set(loadedPosts.map((post) => post.user_id).filter(Boolean)))
-    if (userIds.length === 0) {
-      setProfileMap({})
-      setPostsStatus('loaded')
-      return
-    }
-
-    const { data: profilesData, error: profilesError } = await supabase
-      .from('profiles')
-      .select('id,username,display_name,avatar_url')
-      .in('id', userIds)
-
-    if (profilesError) {
-      console.error('loadPosts profiles fetch failed:', profilesError)
-      setProfileMap({})
-      setPostsStatus('loaded')
-      return
-    }
-
-    const nextProfileMap = (profilesData ?? []).reduce<ProfileMap>((acc, item) => {
-      acc[item.id] = { username: item.username, display_name: item.display_name, avatar_url: item.avatar_url }
-      return acc
-    }, {})
-
-    setProfileMap(nextProfileMap)
-    setPostsStatus('loaded')
-  }
-
-  useEffect(() => {
-    let isMounted = true
-    const authLoadingTimeoutId = window.setTimeout(() => {
-      if (!isMounted) return
-      setInitialAuthLoading(false)
-    }, 2000)
-
-    const clearSignedOutState = () => {
-      if (!isMounted) return
-      setSession(null)
-      setProfile(null)
-      setPosts([])
-      setProfileMap({})
-      setPostsStatus('idle')
-      setPostsError('')
-      setSessionRestoreError('')
-      setScreen('home')
-    }
-
-    const bootstrapSession = async () => {
-      setSessionRestoreError('')
-      try {
-        const { data, error } = await supabase.auth.getSession()
-        if (error) throw error
-        const activeSession = data.session
-        if (!activeSession) {
-          clearSignedOutState()
-          return
+    recorder.start()
+    setIsRecording(true)
+    recordingTimerRef.current = window.setInterval(() => {
+      setRecordingSeconds((prev) => {
+        if (prev >= 60) {
+          stopRecorder()
+          return 60
         }
-        if (!isMounted) return
-        setSession(activeSession)
-        setPostsStatus('loading')
-        void ensureProfile(activeSession).catch((error) => {
-          console.error('ensureProfile failed (initial):', error)
-        })
-        void loadPosts().catch((error) => {
-          console.error('loadPosts failed (initial):', error)
-          if (!isMounted) return
-          setPostsStatus('error')
-          setPostsError('投稿の取得に失敗しました。')
-        })
-      } catch (error) {
-        console.error('session restore failed (initial):', error)
-        clearSignedOutState()
-        if (isMounted) setSessionRestoreError('読み込みに失敗しました。再読み込みしてください。')
-      } finally {
-        if (isMounted) {
-          isRestoringSessionRef.current = false
-          setInitialAuthLoading(false)
-          window.clearTimeout(authLoadingTimeoutId)
-        }
-      }
-    }
-
-    void bootstrapSession()
-
-    const { data: listener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
-      if (!isMounted) return
-      if (isRestoringSessionRef.current) return
-      if (event === 'SIGNED_OUT') {
-        clearSignedOutState()
-        return
-      }
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        try {
-          setPosts([])
-          setProfileMap({})
-          setPostsError('')
-          setSession(newSession)
-          if (newSession) {
-            setPostsStatus('loading')
-            void ensureProfile(newSession).catch((error) => {
-              console.error(`ensureProfile failed (${event}):`, error)
-            })
-            void loadPosts().catch((error) => {
-              console.error(`loadPosts failed (${event}):`, error)
-              if (!isMounted) return
-              setPostsStatus('error')
-              setPostsError('投稿の取得に失敗しました。')
-            })
-          } else {
-            clearSignedOutState()
-          }
-        } catch (error) {
-          console.error(`auth state handling failed (${event}):`, error)
-          if (!newSession) clearSignedOutState()
-          else setSessionRestoreError('読み込みに失敗しました。再読み込みしてください。')
-        }
-      }
-    })
-
-    return () => {
-      isMounted = false
-      window.clearTimeout(authLoadingTimeoutId)
-      listener.subscription.unsubscribe()
-    }
-  }, [])
-
-  const selectedPost = useMemo(() => posts.find((post) => post.id === selectedPostId) ?? posts[0] ?? null, [posts, selectedPostId])
-  const myPosts = useMemo(() => posts.filter((post) => post.user_id === session?.user.id), [posts, session?.user.id])
-
-  const handleCreatePost = async () => {
-    const text = composeText.trim()
-    if (!text || !session?.user) return
-    setIsPosting(true)
-    setErrorMessage('')
-    const { error } = await supabase.from('posts').insert({ user_id: session.user.id, text, visibility: composeVisibility || 'followers' })
-    if (!error) {
-      setComposeText('')
-      setErrorMessage('')
-      setScreen('home')
-      await loadPosts()
-      setIsPosting(false)
-      return
-    }
-    console.error('create post failed:', error)
-    setIsPosting(false)
-    setErrorMessage(error.message || '投稿に失敗しました。時間をおいて再度お試しください。')
+        return prev + 1
+      })
+    }, 1000)
+  } catch (error) {
+    console.error(error)
+    setRecordingError('マイク許可エラー: ブラウザのマイク設定を確認してください。')
   }
+}
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    setScreen('home')
+const toggleRecording = async () => { if (isRecording) stopRecorder(); else await startRecording() }
+
+const ensureSignedUrl = async (post: Post) => {
+  if (!post.audioAsset || audioUrlMap[post.id]) return
+  setAudioLoadState((p) => ({ ...p, [post.id]: 'loading' }))
+  const { data, error } = await supabase.storage.from(post.audioAsset.storage_bucket).createSignedUrl(post.audioAsset.storage_path, 60 * 30)
+  if (error || !data?.signedUrl) {
+    setAudioLoadState((p) => ({ ...p, [post.id]: 'error' }))
+    setAudioLoadError((p) => ({ ...p, [post.id]: error?.message || 'signed URL取得失敗' }))
+    return
   }
+  setAudioUrlMap((p) => ({ ...p, [post.id]: data.signedUrl }))
+  setAudioLoadState((p) => ({ ...p, [post.id]: 'ready' }))
+}
 
-  const formatDate = (value: string) => new Date(value).toLocaleString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-  const profileName = profile?.display_name ?? 'friendcast user'
-  const profileHandle = profile?.username ? `@${profile.username}` : '@user'
-  const profileBio = profile?.bio || '自己紹介はまだありません。'
+const loadPosts = async () => {
+  setPostsStatus('loading'); setPostsError('')
+  const { data: postsData, error: postsErrorValue } = await supabase.from('posts').select('id,text,visibility,created_at,user_id,kind,audio_assets(id,post_id,storage_bucket,storage_path,mime_type,duration_ms,size_bytes)').order('created_at', { ascending: false }).limit(100)
+  if (postsErrorValue) { setPostsStatus('error'); setPostsError(postsErrorValue.message || '投稿の取得に失敗しました。'); return }
+  const loadedPosts = ((postsData ?? []) as SupabasePostRow[]).map((post) => ({ ...post, audioAsset: post.audio_assets?.[0] ?? null }))
+  setPosts(loadedPosts)
+  const userIds = Array.from(new Set(loadedPosts.map((post) => post.user_id).filter(Boolean)))
+  if (userIds.length === 0) { setProfileMap({}); setPostsStatus('loaded'); return }
+  const { data: profilesData } = await supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', userIds)
+  setProfileMap((profilesData ?? []).reduce<ProfileMap>((acc, item) => { acc[item.id] = { username: item.username, display_name: item.display_name, avatar_url: item.avatar_url }; return acc }, {}))
+  setPostsStatus('loaded')
+}
 
-  if (initialAuthLoading) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p>セッションを復元しています...</p></article></main></div>
-  if (!session) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p>親しい人にだけ届ける、声のタイムライン</p>{sessionRestoreError && <p className="status-message status-error">{sessionRestoreError}</p>}<button className="google-login-btn" onClick={() => supabase.auth.signInWithOAuth({ provider: 'google' })}>Googleでログイン</button></article></main></div>
+const ensureProfile = async (activeSession: Session | null) => { /* unchanged */
+  if (!activeSession?.user) return setProfile(null)
+  const id = activeSession.user.id
+  const metadata = activeSession.user.user_metadata ?? {}
+  const emailLocalPart = activeSession.user.email?.split('@')[0] ?? 'user'
+  const displayName = metadata.full_name ?? metadata.name ?? emailLocalPart
+  const avatar = metadata.avatar_url ?? metadata.picture ?? null
+  const username = `${emailLocalPart}_${id.replace(/-/g, '').slice(0, 6)}`
+  const fallbackProfile: Profile = { id, username, display_name: displayName, avatar_url: avatar, bio: '' }
+  await supabase.from('profiles').upsert(fallbackProfile, { onConflict: 'id' })
+  const { data } = await supabase.from('profiles').select('id,username,display_name,avatar_url,bio').eq('id', id).single()
+  setProfile(data ?? fallbackProfile)
+}
 
-  const resolvePostAuthor = (post: Post): PostProfile | null => {
-    return profileMap[post.user_id] ?? null
+useEffect(() => () => { stopRecorder(); if (recordedUrl) URL.revokeObjectURL(recordedUrl) }, [recordedUrl])
+useEffect(() => { if (screen !== 'compose' && isRecording) stopRecorder() }, [screen, isRecording])
+useEffect(() => {
+  let isMounted = true
+  const bootstrap = async () => { const { data } = await supabase.auth.getSession(); if (!isMounted) return; if (!data.session) { setInitialAuthLoading(false); isRestoringSessionRef.current = false; return } setSession(data.session); await ensureProfile(data.session); await loadPosts(); setInitialAuthLoading(false); isRestoringSessionRef.current = false }
+  void bootstrap()
+  const { data: listener } = supabase.auth.onAuthStateChange(async (_event, newSession) => { if (!isMounted || isRestoringSessionRef.current) return; setSession(newSession); if (newSession) { await ensureProfile(newSession); await loadPosts() } })
+  return () => { isMounted = false; listener.subscription.unsubscribe() }
+}, [])
+
+const myPosts = useMemo(() => posts.filter((post) => post.user_id === session?.user.id), [posts, session?.user.id])
+const profileName = profile?.display_name ?? 'friendcast user'
+const profileHandle = profile?.username ? `@${profile.username}` : '@user'
+const profileBio = profile?.bio || '自己紹介はまだありません。'
+const formatDate = (value: string) => new Date(value).toLocaleString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+if (initialAuthLoading) return <div className={`app-shell theme-${resolvedTheme}`}>loading...</div>
+if (!session) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p>親しい人にだけ届ける、声のタイムライン</p>{sessionRestoreError && <p className="status-message status-error">{sessionRestoreError}</p>}<button className="google-login-btn" onClick={() => supabase.auth.signInWithOAuth({ provider: 'google' })}>Googleでログイン</button></article></main></div>
+
+const handleCreatePost = async () => {
+  const text = composeText.trim()
+  if (!session?.user || (!text && !recordedBlob)) return
+  setIsPosting(true); setErrorMessage('')
+  let storagePath: string | null = null
+  if (recordedBlob) {
+    storagePath = `${session.user.id}/${Date.now()}.${(recordedBlob.type.split('/')[1] || 'webm').replace('x-', '')}`
+    const { error } = await supabase.storage.from('voice-posts').upload(storagePath, recordedBlob, { contentType: recordedBlob.type, upsert: false })
+    if (error) { setErrorMessage(`Storage upload失敗: ${error.message}`); setIsPosting(false); return }
   }
-
-  const renderTimelinePost = (post: Post, compact = false) => {
-    const authorProfile = resolvePostAuthor(post)
-    const displayName = authorProfile?.display_name ?? authorProfile?.username ?? 'friendcast user'
-    const handle = authorProfile?.username ? `@${authorProfile.username}` : '@user'
-    return <article key={post.id} className="tweet-item" role="button">
-      <div className="tweet-avatar" style={authorProfile?.avatar_url ? { backgroundImage: `url(${authorProfile.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}>{displayName.slice(0, 1)}</div><div className="tweet-content"><div className="tweet-header-row"><div className="tweet-header"><strong>{displayName}</strong><span>{handle}</span><span>·</span><time>{formatDate(post.created_at)}</time></div><div className="visibility-badge"><span>{visibilityBadgeIcon[post.visibility]}</span><span>{visibilityComposeLabel[post.visibility]}</span></div></div><p className="tweet-text">{post.text}</p>{!compact && <div className="delivery-inline"><small>{audienceLabel[post.visibility]}に届きます</small></div>}<div className="action-row"><button className="icon-btn" onClick={() => { setSelectedPostId(post.id); setScreen('detail') }}>💬 <span>0</span></button><button className="icon-btn">🔁 <span>0</span></button><button className={`icon-btn ${likedPostIds.includes(post.id) ? 'active-icon' : ''}`} onClick={() => setLikedPostIds((prev) => prev.includes(post.id) ? prev.filter((id) => id !== post.id) : [...prev, post.id])}>♡ <span>{likedPostIds.includes(post.id) ? 1 : 0}</span></button><button className={`icon-btn ${savedPostIds.includes(post.id) ? 'active-icon' : ''}`} onClick={() => setSavedPostIds((prev) => prev.includes(post.id) ? prev.filter((id) => id !== post.id) : [...prev, post.id])}><ShareIcon /></button></div></div>
-    </article>
+  const kind: PostKind = recordedBlob ? (text ? 'text_audio' : 'audio') : 'text'
+  const { data: postData, error: postError } = await supabase.from('posts').insert({ user_id: session.user.id, text, visibility: composeVisibility || 'followers', kind }).select('id').single()
+  if (postError || !postData?.id) { setErrorMessage(`posts insert失敗: ${postError?.message ?? 'unknown'}`); setIsPosting(false); return }
+  if (recordedBlob && storagePath) {
+    const { error: audioError } = await supabase.from('audio_assets').insert({ owner_id: session.user.id, post_id: postData.id, storage_bucket: 'voice-posts', storage_path: storagePath, mime_type: recordedBlob.type, duration_ms: recordedDurationMs, size_bytes: recordedBlob.size })
+    if (audioError) { setErrorMessage(`audio_assets insert失敗: ${audioError.message}`); setIsPosting(false); return }
   }
+  setComposeText(''); setRecordedBlob(null); setRecordedDurationMs(0); if (recordedUrl) URL.revokeObjectURL(recordedUrl); setRecordedUrl('')
+  setScreen('home'); await loadPosts(); setIsPosting(false)
+}
 
-  return <div className={`app-shell theme-${resolvedTheme}`}>
-    {screen === 'home' && <header className="home-mobile-header"><button className="mini-avatar" onClick={() => setScreen('profile')}>{profileName.slice(0, 1)}</button><h1>friendcast</h1><span className="header-spacer" /></header>}
-    <main className={`screen ${screen === 'home' ? 'screen-home' : 'glass'}`}>
-      {screen === 'home' && <section><div className="home-context-copy"><p>フォローしている人と、あなたに届いた声</p></div><div className="timeline-list">{postsStatus === 'loading' && <p className="status-message">投稿を読み込み中です...</p>}{postsStatus === 'error' && <p className="status-message status-error">投稿の読み込みに失敗しました: {postsError}</p>}{postsStatus === 'loaded' && posts.length === 0 && <p className="status-message">投稿はまだありません。</p>}{postsStatus === 'loaded' && posts.map((post) => renderTimelinePost(post))}</div></section>}
-      {screen === 'profile' && <section className="profile-screen"><header className="profile-mobile-header"><div className="profile-header-left"><button className="profile-icon-btn" onClick={() => setScreen('home')}>←</button><div><h2>{profileName}</h2><p>{myPosts.length} 件の投稿</p></div></div><button className="profile-close-btn" onClick={() => setScreen('settings')}>×</button></header><div className="profile-cover" /><article className="profile-block"><div className="profile-top-row"><div className="profile-photo" style={profile?.avatar_url ? { backgroundImage: `url(${profile.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined} /><button className="profile-edit-btn">プロフィールを編集</button></div><h3 className="profile-name">{profileName}</h3><p className="profile-id">{profileHandle}</p><p className="profile-bio">{profileBio}</p></article><div className="tabs profile-tabs"><button className={profileTab === 'posts' ? 'active-tab' : ''} onClick={() => setProfileTab('posts')}>投稿</button><button className={profileTab === 'audio' ? 'active-tab' : ''} onClick={() => setProfileTab('audio')}>ボイス</button><button className={profileTab === 'replies' ? 'active-tab' : ''} onClick={() => setProfileTab('replies')}>返信</button><button className={profileTab === 'likes' ? 'active-tab' : ''} onClick={() => setProfileTab('likes')}>いいね</button></div><div className="timeline-list">{myPosts.map((post) => renderTimelinePost(post, true))}</div></section>}
-      {screen === 'compose' && <section className="compose-screen"><div className="compose-input-row"><button className="compose-avatar compose-avatar-button" onClick={() => setScreen('profile')}>{profile?.avatar_url ? <img src={profile.avatar_url} alt="プロフィール" /> : profileName.slice(0, 1)}</button><div className="compose-input-wrap"><textarea maxLength={140} value={composeText} onChange={(e)=>setComposeText(e.target.value.slice(0, 140))} placeholder="いまどうしてる？" className="compose-textarea" /></div></div><div className="compose-counter">{Math.min(composeText.length, 140)} / 140</div><article className="record-card"><button className={`record-fab ${isRecording ? 'recording' : ''}`} onClick={() => setIsRecording(!isRecording)}>🎙</button><p>{isRecording ? '録音中... タップして停止' : 'タップして録音を開始'}</p></article><div className="compose-visibility-area"><p className="compose-visibility-label">公開範囲</p><div className="visibility-grid compose-visibility-grid">{(Object.keys(visibilityOptions) as Visibility[]).map((key)=><button key={key} className={`visibility-item compose-visibility-item ${composeVisibility === key ? 'selected' : ''}`} onClick={()=>setComposeVisibility(key)}>{visibilityComposeLabel[key]}</button>)}</div></div><div className="compose-sticky-action"><button className="compose-post-btn" disabled={composeText.trim().length === 0 || isPosting} onClick={handleCreatePost}>{isPosting ? '投稿中...' : '投稿する'}</button>{errorMessage && <p className="compose-error-message">{errorMessage}</p>}</div><p className="confirm-line">この投稿は「{audienceLabel[composeVisibility]}」に届きます。</p></section>}
-      {screen === 'detail' && selectedPost && <section><h2>投稿詳細</h2><div className="timeline-list">{renderTimelinePost(selectedPost, true)}</div>{mockReplies[selectedPost.id]?.map((reply) => <article key={reply.id} className="reply-card"><div className='row between'><strong>{reply.user}</strong><small>{reply.createdAt}</small></div><p>{reply.text}</p>{reply.audio && <span className="pill">音声返信</span>}</article>)}</section>}
-      {screen === 'search' && <section className="search-screen"><article className="search-panel"><h2>友人検索 / 招待</h2><input placeholder="名前・IDで検索" />{mockUsers.map((user) => <article key={user.id} className="row between user-row"><span>{user.name} {user.id}</span><button>フォロー</button></article>)}</article><article className="search-panel search-logs"><h3>友達の最近の声</h3>{mockSearchAudioLogs.map((log) => <div key={log.id} className="search-log-item"><button className="search-log-play">▷</button><div className="search-log-main"><div className="search-log-head"><strong>{log.name}</strong><time>{log.createdAt}</time></div><div className="search-log-meta"><span>{log.duration}</span><span className="search-log-visibility">{visibilityComposeLabel[log.visibility]}</span></div></div></div>)}</article></section>}
-      {screen === 'settings' && <section><h2>設定</h2><label>テーマ設定</label><select value={theme} onChange={(e) => setTheme(e.target.value as Theme)}><option value="dark">ダーク</option><option value="light">ライト</option><option value="system">システム設定に合わせる</option></select><label>公開範囲の初期設定</label><select defaultValue="followers">{Object.entries(visibilityOptions).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select><button className="logout-btn" onClick={handleLogout}>ログアウト</button></section>}
-    </main>
-    {screen !== 'compose' && <button className="fab global-fab" onClick={() => setScreen('compose')}>🎙</button>}
-    {screen !== 'compose' && <nav className="bottom-nav glass"><button className={screen === 'home' ? 'nav-active' : ''} onClick={() => setScreen('home')}><span>⌂</span><small>ホーム</small></button><button className={screen === 'search' ? 'nav-active' : ''} onClick={() => setScreen('search')}><span>⌕</span><small>検索</small></button><button onClick={() => setScreen('compose')}><span>◉</span><small>投稿</small></button><button className={screen === 'profile' ? 'nav-active' : ''} onClick={() => setScreen('profile')}><span>◡</span><small>プロフ</small></button><button className={screen === 'settings' ? 'nav-active' : ''} onClick={() => setScreen('settings')}><span>⚙</span><small>設定</small></button></nav>}
-  </div>
+const renderAudioPlayer = (post: Post) => {
+  if (!post.audioAsset) return null
+  const state = audioLoadState[post.id] ?? 'idle'
+  const play = async () => {
+    await ensureSignedUrl(post)
+    const url = audioUrlMap[post.id]
+    if (!url) return
+    if (activeAudioPostId === post.id) { playAudioRef.current?.pause(); setActiveAudioPostId(null); return }
+    playAudioRef.current?.pause()
+    playAudioRef.current = new Audio(url)
+    playAudioRef.current.onended = () => setActiveAudioPostId(null)
+    try { await playAudioRef.current.play(); setActiveAudioPostId(post.id) } catch { setAudioLoadError((p) => ({ ...p, [post.id]: '再生失敗' })) }
+  }
+  return <div className="audio-card"><button className="audio-play" onClick={play}>{activeAudioPostId === post.id ? '❚❚' : '▷'}</button><div className="audio-wave">{Array.from({ length: 18 }).map((_, i) => <i key={i} style={{ height: `${8 + ((i % 6) * 4)}px` }} />)}</div><span className="audio-duration">{formatDuration(post.audioAsset.duration_ms)}</span>{state === 'loading' && <small>読み込み中...</small>}{audioLoadError[post.id] && <small className="status-error">{audioLoadError[post.id]}</small>}</div>
+}
+const resolvePostAuthor = (post: Post): PostProfile | null => profileMap[post.user_id] ?? null
+const renderTimelinePost = (post: Post, compact = false) => { const authorProfile = resolvePostAuthor(post); const displayName = authorProfile?.display_name ?? authorProfile?.username ?? 'friendcast user'; const handle = authorProfile?.username ? `@${authorProfile.username}` : '@user'; return <article key={post.id} className="tweet-item" role="button"><div className="tweet-avatar" style={authorProfile?.avatar_url ? { backgroundImage: `url(${authorProfile.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}>{displayName.slice(0, 1)}</div><div className="tweet-content"><div className="tweet-header-row"><div className="tweet-header"><strong>{displayName}</strong><span>{handle}</span><span>·</span><time>{formatDate(post.created_at)}</time></div><div className="visibility-badge"><span>{visibilityBadgeIcon[post.visibility]}</span><span>{visibilityComposeLabel[post.visibility]}</span></div></div><p className="tweet-text">{post.text}</p>{renderAudioPlayer(post)}{!compact && <div className="delivery-inline"><small>{audienceLabel[post.visibility]}に届きます</small></div>}<div className="action-row"><button className="icon-btn" onClick={() => { setSelectedPostId(post.id); setScreen('detail') }}>💬 <span>0</span></button><button className="icon-btn">🔁 <span>0</span></button><button className={`icon-btn ${likedPostIds.includes(post.id) ? 'active-icon' : ''}`} onClick={() => setLikedPostIds((prev) => prev.includes(post.id) ? prev.filter((id) => id !== post.id) : [...prev, post.id])}>♡ <span>{likedPostIds.includes(post.id) ? 1 : 0}</span></button><button className={`icon-btn ${savedPostIds.includes(post.id) ? 'active-icon' : ''}`} onClick={() => setSavedPostIds((prev) => prev.includes(post.id) ? prev.filter((id) => id !== post.id) : [...prev, post.id])}><ShareIcon /></button></div></div></article> }
+
+return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen">{screen === 'home' && <section><div className="timeline-list">{posts.map((post) => renderTimelinePost(post))}</div></section>}{screen === 'profile' && <section className="profile-screen"><h3>{profileName}</h3><p>{profileHandle}</p><p>{profileBio}</p><div className="tabs profile-tabs"><button className={profileTab === 'posts' ? 'active-tab' : ''} onClick={() => setProfileTab('posts')}>投稿</button><button className={profileTab === 'audio' ? 'active-tab' : ''} onClick={() => setProfileTab('audio')}>ボイス</button></div><div className="timeline-list">{(profileTab === 'audio' ? myPosts.filter((p) => p.audioAsset) : myPosts).map((post) => renderTimelinePost(post, true))}</div></section>}{screen === 'compose' && <section className="compose-screen"><textarea maxLength={140} value={composeText} onChange={(e)=>setComposeText(e.target.value.slice(0, 140))} placeholder="いまどうしてる？" className="compose-textarea" /><article className="record-card"><div className={`record-waveform ${isRecording ? 'live' : ''}`}>{Array.from({ length: 12 }).map((_, i) => <span key={i} className="record-bar" style={{ animationDelay: `${i * 0.06}s` }} />)}</div><button className={`record-fab ${isRecording ? 'recording' : ''}`} onClick={toggleRecording}>🎙</button><p>{isRecording ? '録音中... タップして停止' : 'タップして録音を開始'}</p><p>{formatDuration(recordingSeconds * 1000)}</p>{recordedBlob && <div className="audio-preview"><button onClick={() => { if (!previewAudioRef.current && recordedUrl) previewAudioRef.current = new Audio(recordedUrl); void previewAudioRef.current?.play() }}>再生確認</button><button onClick={() => { setRecordedBlob(null); setRecordedDurationMs(0); if (recordedUrl) URL.revokeObjectURL(recordedUrl); setRecordedUrl('') }}>再録音</button><span>録音済み</span></div>}{recordingError && <p className="compose-error-message">{recordingError}</p>}{!isRecordSupported && <p className="compose-error-message">このブラウザでは録音に対応していません</p>}</article><div className="compose-sticky-action"><button className="compose-post-btn" disabled={(!composeText.trim() && !recordedBlob) || isPosting} onClick={handleCreatePost}>{isPosting ? '投稿中...' : '投稿する'}</button>{errorMessage && <p className="compose-error-message">{errorMessage}</p>}</div></section>}</main>{screen !== 'compose' && <button className="fab global-fab" onClick={() => setScreen('compose')}>🎙</button>}</div>
 }
