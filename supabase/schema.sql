@@ -49,3 +49,8 @@ create policy "posts_select_authenticated" on public.posts for select to authent
 create policy "posts_insert_own" on public.posts for insert to authenticated with check (auth.uid() = user_id);
 create policy "posts_update_own" on public.posts for update to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "posts_delete_own" on public.posts for delete to authenticated using (auth.uid() = user_id);
+
+-- v0.4.2: timeline author resolution requires basic profile visibility for authenticated users
+-- keep insert/update constrained to owner; this can be tightened later for private-profile rules.
+drop policy if exists "profiles_select_own" on public.profiles;
+create policy "profiles_select_authenticated" on public.profiles for select to authenticated using (true);
