@@ -145,6 +145,8 @@ button { cursor: pointer; }
 .action-row { justify-content: flex-start; gap: 18px; }
 .icon-btn { display:flex; align-items:center; gap:6px; color:#474355; }
 .icon-btn span { font-size: 17px; }
+.share-icon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.share-icon circle { fill: currentColor; stroke: none; }
 .home-fab { right: 22px; bottom: calc(104px + env(safe-area-inset-bottom)); width: 54px; height: 54px; font-size: 22px; background: #674bb5; box-shadow: 0 8px 20px rgba(103,75,181,.27); }
 .bottom-nav { bottom: 0; left: 0; transform: none; width: 100%; border-radius: 0; border-left: 0; border-right: 0; border-bottom:0; padding: 10px 10px calc(10px + env(safe-area-inset-bottom)); background: rgba(249,249,255,.94); grid-template-columns: repeat(5, 1fr); }
 .bottom-nav button { border:0; background: transparent !important; color:#424154; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; min-height: 52px; padding: 6px 4px; }

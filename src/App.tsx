@@ -27,6 +27,17 @@ const visibilityBadgeIcon: Record<Visibility, string> = {
   private: '◐',
 }
 
+
+const ShareIcon = () => (
+  <svg className="share-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <circle cx="18" cy="5" r="2" />
+    <circle cx="6" cy="12" r="2" />
+    <circle cx="18" cy="19" r="2" />
+    <path d="M8 11l8-5" />
+    <path d="M8 13l8 5" />
+  </svg>
+)
+
 export function App() {
   const [screen, setScreen] = useState<Screen>('home')
   const [selectedPostId, setSelectedPostId] = useState(mockPosts[0].id)
@@ -81,7 +92,7 @@ export function App() {
           <button className="icon-btn" onClick={() => { setSelectedPostId(post.id); setScreen('detail') }}>💬 <span>3</span></button>
           <button className="icon-btn">🔁 <span>1</span></button>
           <button className={`icon-btn ${likedPostIds.includes(post.id) ? 'active-icon' : ''}`} onClick={() => setLikedPostIds((prev) => prev.includes(post.id) ? prev.filter((id) => id !== post.id) : [...prev, post.id])}>♡ <span>{likedPostIds.includes(post.id) ? 46 : 45}</span></button>
-          <button className={`icon-btn ${savedPostIds.includes(post.id) ? 'active-icon' : ''}`} onClick={() => setSavedPostIds((prev) => prev.includes(post.id) ? prev.filter((id) => id !== post.id) : [...prev, post.id])}>↗</button>
+          <button className={`icon-btn ${savedPostIds.includes(post.id) ? 'active-icon' : ''}`} onClick={() => setSavedPostIds((prev) => prev.includes(post.id) ? prev.filter((id) => id !== post.id) : [...prev, post.id])}><ShareIcon /></button>
         </div>
       </div>
     </article>
@@ -217,7 +228,7 @@ export function App() {
                         <button className="icon-btn">💬 <span>12</span></button>
                         <button className="icon-btn">🔁 <span>4</span></button>
                         <button className="icon-btn active-icon">♡ <span>86</span></button>
-                        <button className="icon-btn">↗</button>
+                        <button className="icon-btn"><ShareIcon /></button>
                       </div>
                     </div>
                   </div>
