@@ -245,11 +245,12 @@ button { cursor: pointer; }
 
 /* v0.5.4 layout fixes */
 .tweet-content,.tweet-header-row,.tweet-header,.author-link{min-width:0;}
-.tweet-header-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:start;gap:8px;}
+.tweet-header-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:8px;}
+.tweet-header-actions{display:flex;align-items:flex-start;gap:6px;justify-self:end;}
 .author-link{justify-content:flex-start;flex-wrap:wrap;overflow:hidden;text-align:left;padding:0;border:0;background:transparent!important;}
 .author-link strong,.author-link span,.author-link time{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
 .visibility-badge{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.post-delete-btn{justify-self:end;align-self:start;padding:6px 10px;font-size:11px;min-width:44px;min-height:44px;}
+.post-delete-btn{justify-self:end;align-self:start;padding:0;border-radius:999px;font-size:14px;inline-size:30px;block-size:30px;min-width:30px;min-height:30px;display:grid;place-items:center;background:rgba(255,240,246,.92)!important;}
 .tweet-text{overflow-wrap:anywhere;word-break:break-word;}
 .audio-card{width:100%;max-width:100%;min-width:0;flex-wrap:wrap;}
 .audio-wave{min-width:100px;}
@@ -257,5 +258,6 @@ button { cursor: pointer; }
 .screen-home{padding-bottom:calc(150px + env(safe-area-inset-bottom));}
 .profile-screen{padding-bottom:calc(150px + env(safe-area-inset-bottom));}
 .compose-screen{padding-bottom:calc(96px + env(safe-area-inset-bottom));}
-.global-fab{bottom:calc(124px + env(safe-area-inset-bottom));}
-@media (max-width:390px){.tweet-item{padding:14px 14px 12px;grid-template-columns:44px minmax(0,1fr);} .tweet-avatar{width:40px;height:40px;} .tweet-header-row{grid-template-columns:minmax(0,1fr) auto;}.visibility-badge{grid-column:1/2;}.post-delete-btn{grid-column:2/3;grid-row:1/3;}}
+.global-fab{right:max(12px, calc((100vw - 480px) / 2 + 12px));bottom:calc(136px + env(safe-area-inset-bottom));width:52px;height:52px;font-size:21px;}
+main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
+@media (max-width:390px){.tweet-item{padding:14px 14px 12px;grid-template-columns:44px minmax(0,1fr);} .tweet-avatar{width:40px;height:40px;} .tweet-header-row{grid-template-columns:minmax(0,1fr) auto;}.tweet-header-actions{flex-direction:column;align-items:flex-end;}.visibility-badge{max-width:110px;}}
