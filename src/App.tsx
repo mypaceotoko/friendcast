@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { audienceLabel, mockReplies, mockSearchAudioLogs, mockUsers, visibilityOptions, type Visibility } from './mockData'
 import { supabase } from './lib/supabase'
@@ -36,6 +36,7 @@ export function App() {
   const [postsError, setPostsError] = useState('')
   const [initialAuthLoading, setInitialAuthLoading] = useState(true)
   const [sessionRestoreError, setSessionRestoreError] = useState('')
+  const isRestoringSessionRef = useRef(true)
 
   const resolvedTheme = theme === 'system' ? (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme
 
@@ -115,6 +116,10 @@ export function App() {
 
   useEffect(() => {
     let isMounted = true
+    const authLoadingTimeoutId = window.setTimeout(() => {
+      if (!isMounted) return
+      setInitialAuthLoading(false)
+    }, 2000)
 
     const clearSignedOutState = () => {
       if (!isMounted) return
@@ -140,14 +145,26 @@ export function App() {
         }
         if (!isMounted) return
         setSession(activeSession)
-        await ensureProfile(activeSession)
-        await loadPosts()
+        setPostsStatus('loading')
+        void ensureProfile(activeSession).catch((error) => {
+          console.error('ensureProfile failed (initial):', error)
+        })
+        void loadPosts().catch((error) => {
+          console.error('loadPosts failed (initial):', error)
+          if (!isMounted) return
+          setPostsStatus('error')
+          setPostsError('投稿の取得に失敗しました。')
+        })
       } catch (error) {
         console.error('session restore failed (initial):', error)
         clearSignedOutState()
         if (isMounted) setSessionRestoreError('読み込みに失敗しました。再読み込みしてください。')
       } finally {
-        if (isMounted) setInitialAuthLoading(false)
+        if (isMounted) {
+          isRestoringSessionRef.current = false
+          setInitialAuthLoading(false)
+          window.clearTimeout(authLoadingTimeoutId)
+        }
       }
     }
 
@@ -155,6 +172,7 @@ export function App() {
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       if (!isMounted) return
+      if (isRestoringSessionRef.current) return
       if (event === 'SIGNED_OUT') {
         clearSignedOutState()
         return
@@ -162,10 +180,19 @@ export function App() {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         try {
           setSession(newSession)
-          setProfile(null)
           if (newSession) {
-            await ensureProfile(newSession)
-            await loadPosts()
+            setPostsStatus('loading')
+            void ensureProfile(newSession).catch((error) => {
+              console.error(`ensureProfile failed (${event}):`, error)
+            })
+            void loadPosts().catch((error) => {
+              console.error(`loadPosts failed (${event}):`, error)
+              if (!isMounted) return
+              setPostsStatus('error')
+              setPostsError('投稿の取得に失敗しました。')
+            })
+          } else {
+            clearSignedOutState()
           }
         } catch (error) {
           console.error(`auth state handling failed (${event}):`, error)
@@ -177,6 +204,7 @@ export function App() {
 
     return () => {
       isMounted = false
+      window.clearTimeout(authLoadingTimeoutId)
       listener.subscription.unsubscribe()
     }
   }, [])
