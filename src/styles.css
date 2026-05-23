@@ -49,8 +49,11 @@ button { cursor: pointer; }
 .bottom-nav button { padding: 8px 4px; font-size: 12px; }
 .profile-header-area { height: 110px; border-radius: 14px; background: linear-gradient(130deg,#262f64,#3b4f8f,#3a9cb8); margin-bottom: -36px; }
 .profile-block { padding: 0 0 8px; }
+.profile-top-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
 .avatar { width: 72px; height: 72px; border-radius: 50%; background: linear-gradient(135deg,#8b5cf6,#22d3ee,#ff6bd6); display:grid; place-items:center; font-weight:700; margin-left: 10px; border: 3px solid var(--soft); }
+.profile-edit-btn { width: auto; margin-right: 10px; margin-bottom: 4px; border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 700; background: rgba(248, 251, 255, .94) !important; color: #3f4c6d !important; border: 1px solid rgba(137, 157, 205, .6) !important; }
 .profile-action { width: fit-content; margin-left: auto; margin-top: -24px; }
+.theme-dark .profile-edit-btn { background: rgba(21, 28, 49, .9) !important; color: #dfe8ff !important; border-color: rgba(129, 153, 220, .5) !important; }
 .tabs { display: grid; grid-template-columns: repeat(4,1fr); gap: 4px; margin: 12px 0; }
 .active-tab { border-color: #58d8ff !important; }
 .invite { margin-top: 10px; padding: 10px; border: 1px dashed #6676b8; border-radius: 12px; color: #b8c8ff; }
