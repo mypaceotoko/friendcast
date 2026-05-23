@@ -15,7 +15,6 @@ type SupabasePostRow = {
   visibility: Visibility
   created_at: string
   user_id: string
-  profiles: PostProfile[] | PostProfile | null
 }
 type Post = SupabasePostRow
 type ProfileMap = Record<string, PostProfile>
@@ -82,7 +81,7 @@ export function App() {
 
     const { data: postsData, error: postsErrorValue } = await supabase
       .from('posts')
-      .select('id,text,visibility,created_at,user_id,profiles(username,display_name,avatar_url)')
+      .select('id,text,visibility,created_at,user_id')
       .order('created_at', { ascending: false })
       .limit(100)
 
@@ -188,6 +187,9 @@ export function App() {
       }
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         try {
+          setPosts([])
+          setProfileMap({})
+          setPostsError('')
           setSession(newSession)
           if (newSession) {
             setPostsStatus('loading')
@@ -254,8 +256,7 @@ export function App() {
   if (!session) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p>親しい人にだけ届ける、声のタイムライン</p>{sessionRestoreError && <p className="status-message status-error">{sessionRestoreError}</p>}<button className="google-login-btn" onClick={() => supabase.auth.signInWithOAuth({ provider: 'google' })}>Googleでログイン</button></article></main></div>
 
   const resolvePostAuthor = (post: Post): PostProfile | null => {
-    const joinedProfile = Array.isArray(post.profiles) ? post.profiles[0] : post.profiles
-    return joinedProfile ?? profileMap[post.user_id] ?? null
+    return profileMap[post.user_id] ?? null
   }
 
   const renderTimelinePost = (post: Post, compact = false) => {
