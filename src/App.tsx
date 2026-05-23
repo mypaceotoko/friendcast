@@ -17,7 +17,7 @@ const ShareIcon = () => <svg className="share-icon" viewBox="0 0 24 24" aria-hid
 export function App() {
   const [screen, setScreen] = useState<Screen>('home')
   const [composeText, setComposeText] = useState('')
-  const [composeVisibility, setComposeVisibility] = useState<Visibility>('close_friends')
+  const [composeVisibility, setComposeVisibility] = useState<Visibility>('followers')
   const [isRecording, setIsRecording] = useState(false)
   const [savedPostIds, setSavedPostIds] = useState<string[]>([])
   const [likedPostIds, setLikedPostIds] = useState<string[]>([])
@@ -66,12 +66,17 @@ export function App() {
   const handleCreatePost = async () => {
     const text = composeText.trim()
     if (!text || !session?.user) return
-    const { error } = await supabase.from('posts').insert({ user_id: session.user.id, text, visibility: composeVisibility })
+    const { error } = await supabase.from('posts').insert({ user_id: session.user.id, text, visibility: composeVisibility || 'followers' })
     if (!error) {
       setComposeText('')
       setScreen('home')
       await loadPosts()
     }
+  }
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    setScreen('home')
   }
 
   const formatDate = (value: string) => new Date(value).toLocaleString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -98,7 +103,7 @@ export function App() {
       {screen === 'compose' && <section className="compose-screen"><div className="compose-input-row"><div className="compose-avatar">{profileName.slice(0, 1)}</div><div className="compose-input-wrap"><textarea maxLength={140} value={composeText} onChange={(e)=>setComposeText(e.target.value)} placeholder="いまどうしてる？" className="compose-textarea" /></div></div><div className="compose-counter">{composeText.length} / 140</div><article className="record-card"><button className={`record-fab ${isRecording ? 'recording' : ''}`} onClick={() => setIsRecording(!isRecording)}>🎙</button><p>{isRecording ? '録音中... タップして停止' : 'タップして録音を開始'}</p></article><div className="compose-visibility-area"><p className="compose-visibility-label">公開範囲</p><div className="visibility-grid compose-visibility-grid">{(Object.keys(visibilityOptions) as Visibility[]).map((key)=><button key={key} className={`visibility-item compose-visibility-item ${composeVisibility === key ? 'selected' : ''}`} onClick={()=>setComposeVisibility(key)}>{visibilityComposeLabel[key]}</button>)}</div></div><p className="confirm-line">この投稿は「{audienceLabel[composeVisibility]}」に届きます。</p><button className="compose-post-btn" disabled={!composeText.trim()} onClick={handleCreatePost}>投稿する</button></section>}
       {screen === 'detail' && selectedPost && <section><h2>投稿詳細</h2><div className="timeline-list">{renderTimelinePost(selectedPost, true)}</div>{mockReplies[selectedPost.id]?.map((reply) => <article key={reply.id} className="reply-card"><div className='row between'><strong>{reply.user}</strong><small>{reply.createdAt}</small></div><p>{reply.text}</p>{reply.audio && <span className="pill">音声返信</span>}</article>)}</section>}
       {screen === 'search' && <section className="search-screen"><article className="search-panel"><h2>友人検索 / 招待</h2><input placeholder="名前・IDで検索" />{mockUsers.map((user) => <article key={user.id} className="row between user-row"><span>{user.name} {user.id}</span><button>フォロー</button></article>)}</article><article className="search-panel search-logs"><h3>友達の最近の声</h3>{mockSearchAudioLogs.map((log) => <div key={log.id} className="search-log-item"><button className="search-log-play">▷</button><div className="search-log-main"><div className="search-log-head"><strong>{log.name}</strong><time>{log.createdAt}</time></div><div className="search-log-meta"><span>{log.duration}</span><span className="search-log-visibility">{visibilityComposeLabel[log.visibility]}</span></div></div></div>)}</article></section>}
-      {screen === 'settings' && <section><h2>設定</h2><label>テーマ設定</label><select value={theme} onChange={(e) => setTheme(e.target.value as Theme)}><option value="dark">ダーク</option><option value="light">ライト</option><option value="system">システム設定に合わせる</option></select><label>公開範囲の初期設定</label><select defaultValue="followers">{Object.entries(visibilityOptions).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select><button className="logout-btn" onClick={() => supabase.auth.signOut()}>ログアウト</button></section>}
+      {screen === 'settings' && <section><h2>設定</h2><label>テーマ設定</label><select value={theme} onChange={(e) => setTheme(e.target.value as Theme)}><option value="dark">ダーク</option><option value="light">ライト</option><option value="system">システム設定に合わせる</option></select><label>公開範囲の初期設定</label><select defaultValue="followers">{Object.entries(visibilityOptions).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select><button className="logout-btn" onClick={handleLogout}>ログアウト</button></section>}
     </main>
     {screen !== 'compose' && <button className="fab global-fab" onClick={() => setScreen('compose')}>🎙</button>}
     {screen !== 'compose' && <nav className="bottom-nav glass"><button className={screen === 'home' ? 'nav-active' : ''} onClick={() => setScreen('home')}><span>⌂</span><small>ホーム</small></button><button className={screen === 'search' ? 'nav-active' : ''} onClick={() => setScreen('search')}><span>⌕</span><small>検索</small></button><button onClick={() => setScreen('compose')}><span>◉</span><small>投稿</small></button><button className={screen === 'profile' ? 'nav-active' : ''} onClick={() => setScreen('profile')}><span>◡</span><small>プロフ</small></button><button className={screen === 'settings' ? 'nav-active' : ''} onClick={() => setScreen('settings')}><span>⚙</span><small>設定</small></button></nav>}

@@ -211,3 +211,11 @@ button { cursor: pointer; }
 .login-card p { margin: 0 0 18px; color: #42557f; }
 .google-login-btn, .logout-btn { border-radius: 999px; background: #674bb5 !important; color: #fff !important; border: 0; font-weight: 700; }
 .logout-btn { margin-top: 14px; }
+
+/* interactive layering fixes */
+.screen { position: relative; z-index: 1; }
+.compose-screen { position: relative; z-index: 80; padding-bottom: calc(140px + env(safe-area-inset-bottom)); }
+.bottom-nav { z-index: 60; }
+.global-fab { z-index: 70; }
+.screen section:last-child { padding-bottom: calc(120px + env(safe-area-inset-bottom)); }
+.compose-screen .compose-post-btn { position: relative; z-index: 90; }
