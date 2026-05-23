@@ -102,7 +102,7 @@ export function App() {
         <header className="home-mobile-header">
           <button className="mini-avatar" onClick={() => setScreen('profile')}>い</button>
           <h1>friendcast</h1>
-          <button className="settings-round" onClick={() => setScreen('settings')} aria-label="設定">⚙</button>
+          <span className="header-spacer" aria-hidden="true" />
         </header>
       )}
 
@@ -113,7 +113,6 @@ export function App() {
               <p>フォローしている人と、あなたに届いた声</p>
             </div>
             <div className="timeline-list">{mockPosts.map((post) => renderTimelinePost(post))}</div>
-            <button className="fab home-fab" onClick={() => setScreen('compose')} aria-label="投稿作成">🎙</button>
           </section>
         )}
 
@@ -230,7 +229,6 @@ export function App() {
                     </div>
                   </div>
                 </article>
-                <button className="fab home-fab profile-fab" onClick={() => setScreen('compose')} aria-label="投稿作成">🎙</button>
               </section>
             )}
             {screen === 'search' && (
@@ -269,6 +267,11 @@ export function App() {
           </section>
         )}
       </main>
+
+
+      {screen !== 'compose' && (
+        <button className="fab global-fab" onClick={() => setScreen('compose')} aria-label="投稿作成">🎙</button>
+      )}
 
       {screen !== 'compose' && (
         <nav className="bottom-nav glass">
