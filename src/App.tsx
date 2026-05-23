@@ -3,7 +3,7 @@ import { audienceLabel, mockPosts, mockReplies, mockUsers, visibilityDescription
 
 type Screen = 'home' | 'compose' | 'detail' | 'profile' | 'search' | 'settings'
 type Theme = 'dark' | 'light' | 'system'
-type ProfileTab = 'posts' | 'replies' | 'audio' | 'saved'
+type ProfileTab = 'posts' | 'audio' | 'replies' | 'likes'
 type HomeFeedTab = 'recommended' | 'following'
 
 const visibilityIcons: Record<Visibility, string> = {
@@ -162,7 +162,69 @@ export function App() {
         {screen !== 'home' && screen !== 'compose' && (
           <section>
             {screen === 'detail' && <><h2>投稿詳細</h2><div className="timeline-list">{renderTimelinePost(selectedPost, true)}</div>{mockReplies[selectedPost.id]?.map((reply) => <article key={reply.id} className="reply-card"><div className='row between'><strong>{reply.user}</strong><small>{reply.createdAt}</small></div><p>{reply.text}</p>{reply.audio && <span className="pill">音声返信</span>}</article>)}</>}
-            {screen === 'profile' && <><div className="profile-header-area" /><article className="profile-block"><div className="profile-top-row"><div className="avatar">い</div><button className="profile-edit-btn">プロフィールを編集</button></div><button className="profile-action" onClick={() => setScreen('compose')}>声で投稿</button><strong>{mockUsers[0].name}</strong><p>{mockUsers[0].id}</p><p>{mockUsers[0].bio}</p><p>{mockUsers[0].follows} フォロー · {mockUsers[0].followers} フォロワー</p><div className="tabs"><button className={profileTab === 'posts' ? 'active-tab' : ''} onClick={() => setProfileTab('posts')}>投稿</button><button className={profileTab === 'replies' ? 'active-tab' : ''} onClick={() => setProfileTab('replies')}>返信</button><button className={profileTab === 'audio' ? 'active-tab' : ''} onClick={() => setProfileTab('audio')}>音声</button><button className={profileTab === 'saved' ? 'active-tab' : ''} onClick={() => setProfileTab('saved')}>保存</button></div></article><div className="timeline-list">{mockPosts.filter((post) => profileTab !== 'saved' || savedPostIds.includes(post.id)).map((post) => renderTimelinePost(post))}</div></>}
+            {screen === 'profile' && (
+              <section className="profile-screen">
+                <header className="profile-mobile-header">
+                  <div className="profile-header-left">
+                    <button className="profile-icon-btn" onClick={() => setScreen('home')} aria-label="戻る">←</button>
+                    <div>
+                      <h2>佐々木 結衣</h2>
+                      <p>1,204 件の投稿</p>
+                    </div>
+                  </div>
+                  <button className="profile-close-btn" onClick={() => setScreen('settings')} aria-label="設定">×</button>
+                </header>
+
+                <div className="profile-cover" />
+                <article className="profile-block">
+                  <div className="profile-top-row">
+                    <div className="profile-photo" />
+                    <button className="profile-edit-btn">プロフィールを編集</button>
+                  </div>
+                  <h3 className="profile-name">佐々木 結衣</h3>
+                  <p className="profile-id">@yui_sasaki</p>
+                  <p className="profile-bio">日常の小さな音を集めるのが好きです。🎧 週末はカフェ巡り。声で繋がる優しい世界を探しています。</p>
+                  <div className="profile-meta">
+                    <span>⌂ 10月12日</span>
+                    <span>▦ 2023年4月から利用</span>
+                  </div>
+                  <div className="profile-follow-row">
+                    <span><strong>342</strong> フォロー中</span>
+                    <span><strong>1,024</strong> フォロワー</span>
+                  </div>
+                </article>
+
+                <div className="tabs profile-tabs">
+                  <button className={profileTab === 'posts' ? 'active-tab' : ''} onClick={() => setProfileTab('posts')}>投稿</button>
+                  <button className={profileTab === 'audio' ? 'active-tab' : ''} onClick={() => setProfileTab('audio')}>ボイス</button>
+                  <button className={profileTab === 'replies' ? 'active-tab' : ''} onClick={() => setProfileTab('replies')}>返信</button>
+                  <button className={profileTab === 'likes' ? 'active-tab' : ''} onClick={() => setProfileTab('likes')}>いいね</button>
+                </div>
+
+                <article className="profile-pinned">
+                  <div className="profile-pin-label">📌 固定されたボイス</div>
+                  <div className="profile-pinned-body">
+                    <div className="tweet-avatar profile-pinned-avatar">結</div>
+                    <div className="profile-pinned-main">
+                      <div className="tweet-header"><strong>佐々木 結衣</strong><span>@yui_sasaki</span><span>·</span><time>2026年5月23日 08:45</time><span>•••</span></div>
+                      <p className="tweet-text">初めまして！自己紹介ボイスを録ってみました。<br />よろしくお願いします✨</p>
+                      <div className="audio-card profile-voice-card">
+                        <span className="audio-play">▷</span>
+                        <span className="audio-wave" aria-hidden>{Array.from({ length: 10 }).map((_, i) => <i key={i} style={{ height: `${14 + (i % 5) * 6}px` }} />)}</span>
+                        <span className="audio-duration">0:45</span>
+                      </div>
+                      <div className="action-row profile-action-row">
+                        <button className="icon-btn">💬 <span>12</span></button>
+                        <button className="icon-btn">🔁 <span>4</span></button>
+                        <button className="icon-btn active-icon">♡ <span>86</span></button>
+                        <button className="icon-btn">↗</button>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+                <button className="fab home-fab profile-fab" onClick={() => setScreen('compose')} aria-label="投稿作成">🎙</button>
+              </section>
+            )}
             {screen === 'search' && <><h2>友人検索 / 招待</h2><input placeholder="名前・IDで検索" />{mockUsers.map((user) => <article key={user.id} className="row between user-row"><span>{user.name} {user.id}</span><button>フォロー</button></article>)}</>}
             {screen === 'settings' && <><h2>設定</h2><label>テーマ設定</label><select value={theme} onChange={(e) => setTheme(e.target.value as Theme)}><option value="dark">ダーク</option><option value="light">ライト</option><option value="system">システム設定に合わせる</option></select><label>公開範囲の初期設定</label><select defaultValue="followers">{Object.entries(visibilityOptions).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></>}
           </section>
