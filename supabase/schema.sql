@@ -51,24 +51,42 @@ alter table public.audio_assets enable row level security;
 
 drop policy if exists "profiles_select_own" on public.profiles;
 drop policy if exists "profiles_select_authenticated" on public.profiles;
+drop policy if exists "profiles_insert_own" on public.profiles;
+drop policy if exists "profiles_update_own" on public.profiles;
 create policy "profiles_select_authenticated" on public.profiles for select to authenticated using (true);
 create policy "profiles_insert_own" on public.profiles for insert to authenticated with check (auth.uid() = id);
 create policy "profiles_update_own" on public.profiles for update to authenticated using (auth.uid() = id) with check (auth.uid() = id);
 
+drop policy if exists "posts_select_authenticated" on public.posts;
+drop policy if exists "posts_insert_own" on public.posts;
+drop policy if exists "posts_update_own" on public.posts;
+drop policy if exists "posts_delete_own" on public.posts;
 create policy "posts_select_authenticated" on public.posts for select to authenticated using (true);
 create policy "posts_insert_own" on public.posts for insert to authenticated with check (auth.uid() = user_id);
 create policy "posts_update_own" on public.posts for update to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "posts_delete_own" on public.posts for delete to authenticated using (auth.uid() = user_id);
 
-create policy "audio_assets_select_authenticated_mvp" on public.audio_assets for select to authenticated using (true);
+drop policy if exists "audio_assets_select_authenticated_mvp" on public.audio_assets;
+drop policy if exists "audio_assets_select_authenticated" on public.audio_assets;
+drop policy if exists "audio_assets_insert_own" on public.audio_assets;
+drop policy if exists "audio_assets_update_own" on public.audio_assets;
+drop policy if exists "audio_assets_delete_own" on public.audio_assets;
+create policy "audio_assets_select_authenticated" on public.audio_assets for select to authenticated using (true);
 create policy "audio_assets_insert_own" on public.audio_assets for insert to authenticated with check (auth.uid() = owner_id);
 create policy "audio_assets_update_own" on public.audio_assets for update to authenticated using (auth.uid() = owner_id) with check (auth.uid() = owner_id);
 create policy "audio_assets_delete_own" on public.audio_assets for delete to authenticated using (auth.uid() = owner_id);
+
+grant select, insert, update, delete on public.profiles to authenticated;
+grant select, insert, update, delete on public.posts to authenticated;
+grant select, insert, update, delete on public.audio_assets to authenticated;
 
 -- Storage bucket/policies (run in Supabase SQL editor)
 insert into storage.buckets (id, name, public)
 values ('voice-posts', 'voice-posts', false)
 on conflict (id) do nothing;
+
+drop policy if exists "voice_posts_upload_own" on storage.objects;
+drop policy if exists "voice_posts_select_authenticated_mvp" on storage.objects;
 
 create policy "voice_posts_upload_own" on storage.objects for insert to authenticated
 with check (bucket_id = 'voice-posts' and (storage.foldername(name))[1] = auth.uid()::text);
