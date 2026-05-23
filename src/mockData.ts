@@ -15,15 +15,21 @@ export const visibilityDescriptions: Record<Visibility, string> = {
 }
 
 export const audienceLabel: Record<Visibility, string> = {
-  followers: 'フォロワー全体',
+  followers: 'フォロワー',
   close_friends: '親しい友達',
-  specific: '選択した相手',
+  specific: '選んだ相手',
   private: '自分のみ',
 }
 
 export const mockUsers = [
   { name: 'いっぺい', id: '@ippei', bio: '声で日記を残すのが好き。', follows: 48, followers: 42 },
   { name: 'ゆうや', id: '@yuya_dev', bio: '夜に雑談キャスト更新中', follows: 75, followers: 61 },
+]
+
+export const mockSearchAudioLogs = [
+  { id: 's1', name: 'いっぺい', createdAt: '2026年5月23日 01:28', duration: '0:45', visibility: 'close_friends' as const },
+  { id: 's2', name: 'ゆうや', createdAt: '2026年5月23日 01:15', duration: '1:24', visibility: 'specific' as const },
+  { id: 's3', name: 'みさき', createdAt: '2026年5月23日 00:32', duration: '0:58', visibility: 'followers' as const },
 ]
 
 export const mockPosts = [
