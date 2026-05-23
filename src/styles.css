@@ -71,6 +71,8 @@ button { cursor: pointer; }
 .compose-close { width: 44px; height: 44px; border: 0; border-radius: 50%; padding: 0; font-size: 34px; line-height: 1; color: #f0f2fa; background: #8d8f95 !important; box-shadow: 0 8px 18px rgba(105,108,127,.22); }
 .compose-input-row { display:grid; grid-template-columns: 52px 1fr; gap: 16px; padding: 14px 24px 4px; }
 .compose-avatar { width: 52px; height: 52px; border-radius: 50%; display:grid; place-items:center; font-weight: 700; color: #fff; background: linear-gradient(135deg,#ffc0ba,#7bc4ff,#f88ecd); box-shadow: 0 4px 12px rgba(133,114,204,.18); }
+.compose-avatar-button { border: 0; padding: 0; overflow: hidden; cursor: pointer; }
+.compose-avatar-button img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .compose-textarea { min-height: 172px; border: 0 !important; background: transparent !important; padding: 2px !important; font-size: 20px; line-height: 1.45; font-weight: 500; color: #6a677a !important; }
 .theme-light .compose-textarea { color: #666276 !important; }
 .compose-textarea::placeholder { color: #6f6b80; opacity: .95; }
@@ -96,10 +98,13 @@ button { cursor: pointer; }
 .record-card p { margin: 0; font-size: 18px; font-weight: 700; color: #424357; text-align: center; }
 .theme-light .record-card p { color: #3f3f54; }
 .theme-dark .record-card p { color: #d7ddff; }
-.compose-screen .compose-post-btn { width: calc(100% - 48px); margin: 16px 24px 14px; border: 0; border-radius: 14px; min-height: 56px; padding: 16px 18px; font-size: 18px; font-weight: 700; letter-spacing: .02em; color: #fff !important; background: linear-gradient(145deg,#6d43ec,#9747ff) !important; box-shadow: 0 14px 26px rgba(109,75,209,.36); position: relative; z-index: 95; }
+.compose-sticky-action { position: sticky; bottom: 0; z-index: 110; padding: 12px 24px calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(180deg, rgba(249,249,255,0) 0%, rgba(249,249,255,.95) 28%, rgba(249,249,255,.98) 100%); pointer-events: none; }
+.theme-dark .compose-sticky-action { background: linear-gradient(180deg, rgba(16,20,34,0) 0%, rgba(16,20,34,.95) 28%, rgba(16,20,34,.98) 100%); }
+.compose-screen .compose-post-btn { width: 100%; margin: 0; border: 0; border-radius: 14px; min-height: 56px; padding: 16px 18px; font-size: 18px; font-weight: 700; letter-spacing: .02em; color: #fff !important; background: linear-gradient(145deg,#6d43ec,#9747ff) !important; box-shadow: 0 14px 26px rgba(109,75,209,.36); position: relative; z-index: 120; pointer-events: auto; }
 .compose-screen .compose-post-btn:disabled { background: #cfcce2 !important; color: #fff !important; box-shadow: none; opacity: .9; }
 .theme-dark .compose-screen .compose-post-btn:disabled { background: #505477 !important; color: #dbe1ff !important; }
 .compose-error-message { margin: 0 24px 8px; color: #c43865; font-size: 13px; font-weight: 600; }
+.compose-sticky-action .compose-error-message { margin: 8px 0 0; pointer-events: auto; }
 .compose-visibility-area { margin: 0 24px; padding-top: 20px; border-top: 1px solid #d6def6; padding-bottom: 22px; }
 .theme-light .compose-visibility-area { border-top-color: #d6def6; }
 .theme-dark .compose-visibility-area { border-top-color: rgba(129,153,220,.35); }
@@ -156,6 +161,8 @@ button { cursor: pointer; }
 .bottom-nav small { font-size: 11px; }
 .theme-dark .screen-home, .theme-dark .home-context-copy, .theme-dark .home-mobile-header, .theme-dark .bottom-nav { background: #101523; }
 .theme-dark .home-context-copy p { color: #b6c4ea; }
+.status-message { margin: 0; padding: 18px 20px; color: #4a5b84; font-size: 14px; font-weight: 600; }
+.status-error { color: #b4234d; }
 
 .profile-screen { margin: -12px; background: #f9f9ff; min-height: calc(100dvh - 10px); padding-bottom: calc(128px + env(safe-area-inset-bottom)); }
 .profile-mobile-header { position: sticky; top: 0; z-index: 60; display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; min-height: 74px; background: rgba(239, 239, 246, .94); backdrop-filter: blur(8px); border-bottom: 1px solid rgba(122,117,131,.16); }
