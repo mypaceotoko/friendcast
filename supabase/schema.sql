@@ -53,4 +53,5 @@ create policy "posts_delete_own" on public.posts for delete to authenticated usi
 -- v0.4.2: timeline author resolution requires basic profile visibility for authenticated users
 -- keep insert/update constrained to owner; this can be tightened later for private-profile rules.
 drop policy if exists "profiles_select_own" on public.profiles;
+drop policy if exists "profiles_select_authenticated" on public.profiles;
 create policy "profiles_select_authenticated" on public.profiles for select to authenticated using (true);
