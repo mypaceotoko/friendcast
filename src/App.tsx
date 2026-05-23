@@ -9,7 +9,16 @@ type ProfileTab = 'posts' | 'audio' | 'replies' | 'likes'
 
 type Profile = { id: string; username: string; display_name: string | null; avatar_url: string | null; bio: string }
 type PostProfile = { username: string; display_name: string | null; avatar_url: string | null }
-type Post = { id: string; text: string; visibility: Visibility; created_at: string; user_id: string; profiles: PostProfile[] | PostProfile | null }
+type SupabasePostRow = {
+  id: string
+  text: string
+  visibility: Visibility
+  created_at: string
+  user_id: string
+  profiles: PostProfile[] | PostProfile | null
+}
+type Post = SupabasePostRow
+type ProfileMap = Record<string, PostProfile>
 type PostsStatus = 'idle' | 'loading' | 'loaded' | 'error'
 
 const visibilityComposeLabel: Record<Visibility, string> = { followers: 'フォロワー', close_friends: '親しい友達', specific: 'カスタム', private: '自分のみ' }
@@ -28,7 +37,7 @@ export function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [posts, setPosts] = useState<Post[]>([])
-  const [profileMap, setProfileMap] = useState<Record<string, PostProfile>>({})
+  const [profileMap, setProfileMap] = useState<ProfileMap>({})
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
   const [isPosting, setIsPosting] = useState(false)
@@ -83,7 +92,7 @@ export function App() {
       return
     }
 
-    const loadedPosts = (postsData ?? []) as Post[]
+    const loadedPosts: SupabasePostRow[] = (postsData ?? []) as SupabasePostRow[]
     setPosts(loadedPosts)
 
     const userIds = Array.from(new Set(loadedPosts.map((post) => post.user_id).filter(Boolean)))
@@ -105,7 +114,7 @@ export function App() {
       return
     }
 
-    const nextProfileMap = (profilesData ?? []).reduce<Record<string, PostProfile>>((acc, item) => {
+    const nextProfileMap = (profilesData ?? []).reduce<ProfileMap>((acc, item) => {
       acc[item.id] = { username: item.username, display_name: item.display_name, avatar_url: item.avatar_url }
       return acc
     }, {})
