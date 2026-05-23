@@ -93,7 +93,7 @@ export function App() {
         <header className="home-mobile-header">
           <button className="mini-avatar" onClick={() => setScreen('profile')}>い</button>
           <h1>friendcast</h1>
-          <button className="settings-round" onClick={() => setScreen('settings')} aria-label="設定">×</button>
+          <button className="settings-round" onClick={() => setScreen('settings')} aria-label="設定">⚙</button>
         </header>
       )}
 
