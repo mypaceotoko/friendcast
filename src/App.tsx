@@ -192,13 +192,15 @@ export function App() {
         )}
       </main>
 
-      <nav className="bottom-nav glass">
-        <button onClick={() => setScreen('home')}>ホーム</button>
-        <button onClick={() => setScreen('search')}>検索</button>
-        <button onClick={() => setScreen('compose')}>投稿</button>
-        <button onClick={() => setScreen('profile')}>プロフィール</button>
-        <button onClick={() => setScreen('settings')}>設定</button>
-      </nav>
+      {screen !== 'compose' && (
+        <nav className="bottom-nav glass">
+          <button onClick={() => setScreen('home')}>ホーム</button>
+          <button onClick={() => setScreen('search')}>検索</button>
+          <button onClick={() => setScreen('compose')}>投稿</button>
+          <button onClick={() => setScreen('profile')}>プロフィール</button>
+          <button onClick={() => setScreen('settings')}>設定</button>
+        </nav>
+      )}
     </div>
   )
 }
