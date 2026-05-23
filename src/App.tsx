@@ -28,10 +28,14 @@ export function App() {
   const [activeAudioId, setActiveAudioId] = useState<string | null>(null)
   const [savedPostIds, setSavedPostIds] = useState<string[]>([])
   const [likedPostIds, setLikedPostIds] = useState<string[]>([])
-  const [theme, setTheme] = useState<Theme>('dark')
+  const [theme, setTheme] = useState<Theme>('light')
   const [profileTab, setProfileTab] = useState<ProfileTab>('posts')
 
   const selectedPost = useMemo(() => mockPosts.find((post) => post.id === selectedPostId) ?? mockPosts[0], [selectedPostId])
+
+  const resolvedTheme = theme === 'system'
+    ? (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : theme
 
   const renderTimelinePost = (post: (typeof mockPosts)[number], compact = false) => (
     <article key={post.id} className="tweet-item" role="button">
@@ -69,7 +73,7 @@ export function App() {
   )
 
   return (
-    <div className={`app-shell theme-${theme === 'system' ? 'dark' : theme}`}>
+    <div className={`app-shell theme-${resolvedTheme}`}>
       <header className="app-header glass">
         <h1>friendcast</h1>
         <p>親しい人にだけ届ける、声のタイムライン</p>
