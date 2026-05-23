@@ -8,9 +8,9 @@ type Theme = 'dark' | 'light' | 'system'
 type ProfileTab = 'posts' | 'audio' | 'replies' | 'likes'
 
 type Profile = { id: string; username: string; display_name: string | null; avatar_url: string | null; bio: string }
-type Post = { id: string; text: string; visibility: Visibility; created_at: string; user_id: string; profiles: { username: string; display_name: string | null; avatar_url: string | null }[] | null }
+type PostProfile = { username: string; display_name: string | null; avatar_url: string | null }
+type Post = { id: string; text: string; visibility: Visibility; created_at: string; user_id: string; profiles: PostProfile[] | PostProfile | null }
 type PostsStatus = 'idle' | 'loading' | 'loaded' | 'error'
-const SESSION_RESTORE_TIMEOUT_MS = 8000
 
 const visibilityComposeLabel: Record<Visibility, string> = { followers: 'フォロワー', close_friends: '親しい友達', specific: 'カスタム', private: '自分のみ' }
 const visibilityBadgeIcon: Record<Visibility, string> = { followers: '◉', close_friends: '◎', specific: '✦', private: '◐' }
@@ -28,12 +28,13 @@ export function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [posts, setPosts] = useState<Post[]>([])
+  const [profileMap, setProfileMap] = useState<Record<string, PostProfile>>({})
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
   const [isPosting, setIsPosting] = useState(false)
   const [postsStatus, setPostsStatus] = useState<PostsStatus>('idle')
   const [postsError, setPostsError] = useState('')
-  const [isRestoringSession, setIsRestoringSession] = useState(true)
+  const [initialAuthLoading, setInitialAuthLoading] = useState(true)
   const [sessionRestoreError, setSessionRestoreError] = useState('')
 
   const resolvedTheme = theme === 'system' ? (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme
@@ -68,38 +69,67 @@ export function App() {
   const loadPosts = async () => {
     setPostsStatus('loading')
     setPostsError('')
-    const { data, error } = await supabase.from('posts').select('id,text,visibility,created_at,user_id,profiles(username,display_name,avatar_url)').order('created_at', { ascending: false }).limit(100)
-    if (error) {
+
+    const { data: postsData, error: postsErrorValue } = await supabase
+      .from('posts')
+      .select('id,text,visibility,created_at,user_id,profiles(username,display_name,avatar_url)')
+      .order('created_at', { ascending: false })
+      .limit(100)
+
+    if (postsErrorValue) {
       setPostsStatus('error')
-      setPostsError(error.message || '投稿の取得に失敗しました。')
+      setPostsError(postsErrorValue.message || '投稿の取得に失敗しました。')
       return
     }
-    setPosts(data as Post[])
+
+    const loadedPosts = (postsData ?? []) as Post[]
+    setPosts(loadedPosts)
+
+    const userIds = Array.from(new Set(loadedPosts.map((post) => post.user_id).filter(Boolean)))
+    if (userIds.length === 0) {
+      setProfileMap({})
+      setPostsStatus('loaded')
+      return
+    }
+
+    const { data: profilesData, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id,username,display_name,avatar_url')
+      .in('id', userIds)
+
+    if (profilesError) {
+      console.error('loadPosts profiles fetch failed:', profilesError)
+      setProfileMap({})
+      setPostsStatus('loaded')
+      return
+    }
+
+    const nextProfileMap = (profilesData ?? []).reduce<Record<string, PostProfile>>((acc, item) => {
+      acc[item.id] = { username: item.username, display_name: item.display_name, avatar_url: item.avatar_url }
+      return acc
+    }, {})
+
+    setProfileMap(nextProfileMap)
     setPostsStatus('loaded')
   }
 
   useEffect(() => {
     let isMounted = true
-    let restoreInProgress = false
 
     const clearSignedOutState = () => {
       if (!isMounted) return
       setSession(null)
       setProfile(null)
       setPosts([])
+      setProfileMap({})
       setPostsStatus('idle')
       setPostsError('')
-      setIsRestoringSession(false)
+      setSessionRestoreError('')
       setScreen('home')
     }
 
-    const runSessionRestore = async (source: 'initial' | 'auth') => {
-      if (restoreInProgress) return
-      restoreInProgress = true
-      if (isMounted) {
-        setIsRestoringSession(true)
-        setSessionRestoreError('')
-      }
+    const bootstrapSession = async () => {
+      setSessionRestoreError('')
       try {
         const { data, error } = await supabase.auth.getSession()
         if (error) throw error
@@ -110,35 +140,18 @@ export function App() {
         }
         if (!isMounted) return
         setSession(activeSession)
-        try {
-          await ensureProfile(activeSession)
-        } catch (profileError) {
-          console.error('ensureProfile failed:', profileError)
-        }
+        await ensureProfile(activeSession)
         await loadPosts()
       } catch (error) {
-        console.error(`session restore failed (${source}):`, error)
-        if (isMounted) {
-          clearSignedOutState()
-          setSessionRestoreError('読み込みに失敗しました。再読み込みしてください。')
-        }
+        console.error('session restore failed (initial):', error)
+        clearSignedOutState()
+        if (isMounted) setSessionRestoreError('読み込みに失敗しました。再読み込みしてください。')
       } finally {
-        restoreInProgress = false
-        if (isMounted) setIsRestoringSession(false)
+        if (isMounted) setInitialAuthLoading(false)
       }
     }
 
-    const timeoutId = window.setTimeout(() => {
-      if (!isMounted) return
-      if (restoreInProgress) {
-        console.error('session restore timeout reached')
-        restoreInProgress = false
-        setIsRestoringSession(false)
-        setSessionRestoreError('読み込みに失敗しました。再読み込みしてください。')
-      }
-    }, SESSION_RESTORE_TIMEOUT_MS)
-
-    void runSessionRestore('initial')
+    void bootstrapSession()
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       if (!isMounted) return
@@ -147,25 +160,23 @@ export function App() {
         return
       }
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        setIsRestoringSession(true)
-        setSessionRestoreError('')
         try {
           setSession(newSession)
-          await ensureProfile(newSession)
-          if (newSession) await loadPosts()
+          setProfile(null)
+          if (newSession) {
+            await ensureProfile(newSession)
+            await loadPosts()
+          }
         } catch (error) {
           console.error(`auth state handling failed (${event}):`, error)
           if (!newSession) clearSignedOutState()
           else setSessionRestoreError('読み込みに失敗しました。再読み込みしてください。')
-        } finally {
-          if (isMounted) setIsRestoringSession(false)
         }
       }
     })
 
     return () => {
       isMounted = false
-      window.clearTimeout(timeoutId)
       listener.subscription.unsubscribe()
     }
   }, [])
@@ -174,7 +185,6 @@ export function App() {
   const myPosts = useMemo(() => posts.filter((post) => post.user_id === session?.user.id), [posts, session?.user.id])
 
   const handleCreatePost = async () => {
-    console.log('submit clicked', composeText)
     const text = composeText.trim()
     if (!text || !session?.user) return
     setIsPosting(true)
@@ -203,15 +213,20 @@ export function App() {
   const profileHandle = profile?.username ? `@${profile.username}` : '@user'
   const profileBio = profile?.bio || '自己紹介はまだありません。'
 
-  if (isRestoringSession) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p>セッションを復元しています...</p></article></main></div>
+  if (initialAuthLoading) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p>セッションを復元しています...</p></article></main></div>
   if (!session) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p>親しい人にだけ届ける、声のタイムライン</p>{sessionRestoreError && <p className="status-message status-error">{sessionRestoreError}</p>}<button className="google-login-btn" onClick={() => supabase.auth.signInWithOAuth({ provider: 'google' })}>Googleでログイン</button></article></main></div>
 
+  const resolvePostAuthor = (post: Post): PostProfile | null => {
+    const joinedProfile = Array.isArray(post.profiles) ? post.profiles[0] : post.profiles
+    return joinedProfile ?? profileMap[post.user_id] ?? null
+  }
+
   const renderTimelinePost = (post: Post, compact = false) => {
-    const postProfile = post.profiles?.[0]
-    const displayName = postProfile?.display_name ?? postProfile?.username ?? 'friendcast user'
-    const handle = postProfile?.username ? `@${postProfile.username}` : '@user'
+    const authorProfile = resolvePostAuthor(post)
+    const displayName = authorProfile?.display_name ?? authorProfile?.username ?? 'friendcast user'
+    const handle = authorProfile?.username ? `@${authorProfile.username}` : '@user'
     return <article key={post.id} className="tweet-item" role="button">
-      <div className="tweet-avatar" style={postProfile?.avatar_url ? { backgroundImage: `url(${postProfile.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}>{displayName.slice(0, 1)}</div><div className="tweet-content"><div className="tweet-header-row"><div className="tweet-header"><strong>{displayName}</strong><span>{handle}</span><span>·</span><time>{formatDate(post.created_at)}</time></div><div className="visibility-badge"><span>{visibilityBadgeIcon[post.visibility]}</span><span>{visibilityComposeLabel[post.visibility]}</span></div></div><p className="tweet-text">{post.text}</p>{!compact && <div className="delivery-inline"><small>{audienceLabel[post.visibility]}に届きます</small></div>}<div className="action-row"><button className="icon-btn" onClick={() => { setSelectedPostId(post.id); setScreen('detail') }}>💬 <span>0</span></button><button className="icon-btn">🔁 <span>0</span></button><button className={`icon-btn ${likedPostIds.includes(post.id) ? 'active-icon' : ''}`} onClick={() => setLikedPostIds((prev) => prev.includes(post.id) ? prev.filter((id) => id !== post.id) : [...prev, post.id])}>♡ <span>{likedPostIds.includes(post.id) ? 1 : 0}</span></button><button className={`icon-btn ${savedPostIds.includes(post.id) ? 'active-icon' : ''}`} onClick={() => setSavedPostIds((prev) => prev.includes(post.id) ? prev.filter((id) => id !== post.id) : [...prev, post.id])}><ShareIcon /></button></div></div>
+      <div className="tweet-avatar" style={authorProfile?.avatar_url ? { backgroundImage: `url(${authorProfile.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}>{displayName.slice(0, 1)}</div><div className="tweet-content"><div className="tweet-header-row"><div className="tweet-header"><strong>{displayName}</strong><span>{handle}</span><span>·</span><time>{formatDate(post.created_at)}</time></div><div className="visibility-badge"><span>{visibilityBadgeIcon[post.visibility]}</span><span>{visibilityComposeLabel[post.visibility]}</span></div></div><p className="tweet-text">{post.text}</p>{!compact && <div className="delivery-inline"><small>{audienceLabel[post.visibility]}に届きます</small></div>}<div className="action-row"><button className="icon-btn" onClick={() => { setSelectedPostId(post.id); setScreen('detail') }}>💬 <span>0</span></button><button className="icon-btn">🔁 <span>0</span></button><button className={`icon-btn ${likedPostIds.includes(post.id) ? 'active-icon' : ''}`} onClick={() => setLikedPostIds((prev) => prev.includes(post.id) ? prev.filter((id) => id !== post.id) : [...prev, post.id])}>♡ <span>{likedPostIds.includes(post.id) ? 1 : 0}</span></button><button className={`icon-btn ${savedPostIds.includes(post.id) ? 'active-icon' : ''}`} onClick={() => setSavedPostIds((prev) => prev.includes(post.id) ? prev.filter((id) => id !== post.id) : [...prev, post.id])}><ShareIcon /></button></div></div>
     </article>
   }
 
