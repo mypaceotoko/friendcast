@@ -153,8 +153,8 @@ button { cursor: pointer; }
 .icon-btn span { font-size: 17px; }
 .share-icon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .share-icon circle { fill: currentColor; stroke: none; }
-.global-fab { position: fixed; right: max(16px, calc((100vw - 480px) / 2 + 18px)); bottom: calc(86px + env(safe-area-inset-bottom)); width: 56px; height: 56px; border-radius: 999px; border: 0; font-size: 23px; background: #674bb5; color: #fff; box-shadow: 0 10px 24px rgba(103,75,181,.32); z-index: 70; }
-.bottom-nav { bottom: 0; left: 0; transform: none; width: 100%; border-radius: 0; border-left: 0; border-right: 0; border-bottom:0; padding: 10px 10px calc(10px + env(safe-area-inset-bottom)); background: rgba(249,249,255,.94); grid-template-columns: repeat(5, 1fr); }
+.global-fab { position: fixed; right: max(16px, calc((100vw - 480px) / 2 + 18px)); bottom: calc(96px + env(safe-area-inset-bottom)); width: 56px; height: 56px; border-radius: 999px; border: 0; font-size: 23px; background: #674bb5; color: #fff; box-shadow: 0 10px 24px rgba(103,75,181,.32); z-index: 75; }
+.bottom-nav { position: fixed; bottom: 0; left: 0; transform: none; width: 100%; border-radius: 0; border-left: 0; border-right: 0; border-bottom:0; padding: 10px 10px calc(10px + env(safe-area-inset-bottom)); background: rgba(249,249,255,.94); grid-template-columns: repeat(5, 1fr); opacity: 1; pointer-events: auto; }
 .bottom-nav button { border:0; background: transparent !important; color:#424154; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; min-height: 52px; padding: 6px 4px; }
 .bottom-nav button span { line-height: 1; display: block; }
 .bottom-nav .nav-active { background: #a88df7 !important; color:#1f1740; border-radius: 999px; }
@@ -225,7 +225,7 @@ button { cursor: pointer; }
 /* interactive layering fixes */
 .screen { position: relative; z-index: 1; }
 .compose-screen { position: relative; z-index: 80; padding-bottom: calc(32px + env(safe-area-inset-bottom)); }
-.bottom-nav { z-index: 60; }
+.bottom-nav { z-index: 72; }
 .global-fab { z-index: 70; }
 .screen section:last-child { padding-bottom: calc(120px + env(safe-area-inset-bottom)); }
 .compose-screen .compose-post-btn { position: relative; z-index: 95; }
