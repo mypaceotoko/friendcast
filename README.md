@@ -123,3 +123,36 @@ npm run dev
 - ホーム投稿の音声カードを本文列の開始位置に合わせて横幅・内側余白・波形サイズ・再生ボタンサイズを再調整し、右端の窮屈さを緩和
 - 音声カード内の再生ボタン/波形/再生時間が1行で自然に収まるように微調整し、iPhone幅での見切れを抑制
 - 下部ナビ（ホーム/検索/投稿/プロフ/設定）は既存構成を維持し、投稿作成画面でのみ非表示の方針を継続
+
+## 16. v0.3 Googleログイン + profiles接続
+- Supabase Auth + Google OAuth を導入し、未ログイン時はログインカードを表示
+- ログイン後に `profiles` テーブルへ初回upsertし、プロフィール表示に `display_name / username / avatar_url / bio` を利用
+- 設定画面にログアウトボタンを追加
+- 投稿・音声・フォロー関連は引き続きモック実装のまま（v0.3対象外）
+
+### 必要な環境変数
+`.env` に以下を設定してください（`.env.example` 参照）
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+### Supabase側で必要な設定
+1. Auth > Providers で Google を有効化
+2. Redirect URL にローカル開発URL/本番URLを登録
+3. `supabase/schema.sql` を実行して `profiles` テーブルと最低限のRLSを作成
+
+### Google OAuth設定の注意
+- Google Cloud Console 側の OAuth 同意画面を設定
+- 承認済みリダイレクトURIに Supabase 側コールバックURLを追加
+- ローカル確認時は `http://localhost:5173` 系URLも忘れず許可
+
+### ローカル起動手順
+```bash
+npm install
+cp .env.example .env
+# .env にSupabase値を設定
+npm run dev
+```
+
+### Vercelデプロイ時の注意
+- Vercel Project Settings > Environment Variables に同じ2変数を設定する必要があります。
+- 環境変数未設定の場合、アプリ起動時にエラーになります。
