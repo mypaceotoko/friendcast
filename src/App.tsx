@@ -6,10 +6,10 @@ type Theme = 'dark' | 'light' | 'system'
 type ProfileTab = 'posts' | 'replies' | 'audio' | 'saved'
 
 const visibilityIcons: Record<Visibility, string> = {
-  followers: '👥',
-  close_friends: '🤝',
-  specific: '⚙️',
-  private: '🔒',
+  followers: '◉',
+  close_friends: '◍',
+  specific: '✦',
+  private: '◐',
 }
 
 const visibilityComposeLabel: Record<Visibility, string> = {
