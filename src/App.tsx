@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react'
-import { audienceLabel, mockPosts, mockReplies, mockUsers, visibilityDescriptions, visibilityOptions, type Visibility } from './mockData'
+import { audienceLabel, mockPosts, mockReplies, mockSearchAudioLogs, mockUsers, visibilityDescriptions, visibilityOptions, type Visibility } from './mockData'
 
 type Screen = 'home' | 'compose' | 'detail' | 'profile' | 'search' | 'settings'
 type Theme = 'dark' | 'light' | 'system'
 type ProfileTab = 'posts' | 'audio' | 'replies' | 'likes'
-type HomeFeedTab = 'recommended' | 'following'
 
 const visibilityIcons: Record<Visibility, string> = {
   followers: '◉',
@@ -49,7 +48,6 @@ export function App() {
   const [likedPostIds, setLikedPostIds] = useState<string[]>([])
   const [theme, setTheme] = useState<Theme>('light')
   const [profileTab, setProfileTab] = useState<ProfileTab>('posts')
-  const [homeTab, setHomeTab] = useState<HomeFeedTab>('recommended')
 
   const selectedPost = useMemo(() => mockPosts.find((post) => post.id === selectedPostId) ?? mockPosts[0], [selectedPostId])
 
@@ -85,7 +83,7 @@ export function App() {
         )}
         {!compact && (
           <div className="delivery-inline">
-            <small>この声は「{audienceLabel[post.visibility]}」に届きます</small>
+            <small>{audienceLabel[post.visibility]}に届きます</small>
           </div>
         )}
         <div className="action-row">
@@ -111,9 +109,8 @@ export function App() {
       <main className={`screen ${screen === 'home' ? 'screen-home' : 'glass'}`}>
         {screen === 'home' && (
           <section>
-            <div className="home-tabs">
-              <button className={homeTab === 'recommended' ? 'active-home-tab' : ''} onClick={() => setHomeTab('recommended')}>おすすめ</button>
-              <button className={homeTab === 'following' ? 'active-home-tab' : ''} onClick={() => setHomeTab('following')}>フォロー中</button>
+            <div className="home-context-copy">
+              <p>フォローしている人と、あなたに届いた声</p>
             </div>
             <div className="timeline-list">{mockPosts.map((post) => renderTimelinePost(post))}</div>
             <button className="fab home-fab" onClick={() => setScreen('compose')} aria-label="投稿作成">🎙</button>
@@ -199,10 +196,10 @@ export function App() {
                     <span>⌂ 10月12日</span>
                     <span>▦ 2023年4月から利用</span>
                   </div>
-                  <div className="profile-follow-row">
-                    <span><strong>342</strong> フォロー中</span>
-                    <span><strong>1,024</strong> フォロワー</span>
-                  </div>
+                <div className="profile-follow-row">
+                  <span><strong>342</strong> フォロー中</span>
+                  <span><strong>1,024</strong> フォロワー</span>
+                </div>
                 </article>
 
                 <div className="tabs profile-tabs">
@@ -236,7 +233,38 @@ export function App() {
                 <button className="fab home-fab profile-fab" onClick={() => setScreen('compose')} aria-label="投稿作成">🎙</button>
               </section>
             )}
-            {screen === 'search' && <><h2>友人検索 / 招待</h2><input placeholder="名前・IDで検索" />{mockUsers.map((user) => <article key={user.id} className="row between user-row"><span>{user.name} {user.id}</span><button>フォロー</button></article>)}</>}
+            {screen === 'search' && (
+              <section className="search-screen">
+                <article className="search-panel">
+                  <h2>友人検索 / 招待</h2>
+                  <input placeholder="名前・IDで検索" />
+                  {mockUsers.map((user) => (
+                    <article key={user.id} className="row between user-row">
+                      <span>{user.name} {user.id}</span>
+                      <button>フォロー</button>
+                    </article>
+                  ))}
+                </article>
+                <article className="search-panel search-logs">
+                  <h3>友達の最近の声</h3>
+                  {mockSearchAudioLogs.map((log) => (
+                    <div key={log.id} className="search-log-item">
+                      <button className="search-log-play" aria-label={`${log.name}の音声を再生`}>▷</button>
+                      <div className="search-log-main">
+                        <div className="search-log-head">
+                          <strong>{log.name}</strong>
+                          <time>{log.createdAt}</time>
+                        </div>
+                        <div className="search-log-meta">
+                          <span>{log.duration}</span>
+                          <span className="search-log-visibility">{visibilityComposeLabel[log.visibility]}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </article>
+              </section>
+            )}
             {screen === 'settings' && <><h2>設定</h2><label>テーマ設定</label><select value={theme} onChange={(e) => setTheme(e.target.value as Theme)}><option value="dark">ダーク</option><option value="light">ライト</option><option value="system">システム設定に合わせる</option></select><label>公開範囲の初期設定</label><select defaultValue="followers">{Object.entries(visibilityOptions).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></>}
           </section>
         )}
