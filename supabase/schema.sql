@@ -87,9 +87,13 @@ on conflict (id) do nothing;
 
 drop policy if exists "voice_posts_upload_own" on storage.objects;
 drop policy if exists "voice_posts_select_authenticated_mvp" on storage.objects;
+drop policy if exists "voice_posts_delete_own" on storage.objects;
 
 create policy "voice_posts_upload_own" on storage.objects for insert to authenticated
 with check (bucket_id = 'voice-posts' and (storage.foldername(name))[1] = auth.uid()::text);
 
 create policy "voice_posts_select_authenticated_mvp" on storage.objects for select to authenticated
 using (bucket_id = 'voice-posts');
+
+create policy "voice_posts_delete_own" on storage.objects for delete to authenticated
+using (bucket_id = 'voice-posts' and (storage.foldername(name))[1] = auth.uid()::text);
