@@ -1,4 +1,4 @@
-# friendcast v0.1
+# friendcast v0.4
 
 ## 1. friendcastの概要
 friendcastは「親しい人にだけ届ける、声のタイムライン」をコンセプトにしたクローズド型音声SNSです。スマホで直感的に使えるX/Twitter風タイムラインをベースにしつつ、音声投稿が主役になるUIを目指しています。
@@ -156,3 +156,11 @@ npm run dev
 ### Vercelデプロイ時の注意
 - Vercel Project Settings > Environment Variables に同じ2変数を設定する必要があります。
 - 環境変数未設定の場合、アプリ起動時にエラーになります。
+
+
+## 17. v0.4 テキスト投稿の実データ接続
+- ログイン済みユーザーが `140文字以内` のテキスト投稿を作成できるよう、投稿作成画面に「投稿する」ボタンを追加
+- Supabase `posts` テーブルへ `text / visibility / user_id` を保存
+- ホームタイムラインをモック表示から Supabase 実データ表示へ変更（新しい順）
+- プロフィール画面の投稿数と投稿一覧をログインユーザーの実投稿データに接続
+- `supabase/schema.sql` に `posts` テーブル、トリガー、RLSポリシーを追加
