@@ -10,6 +10,7 @@ type ProfileTab = 'posts' | 'audio' | 'replies' | 'likes'
 type Profile = { id: string; username: string; display_name: string | null; avatar_url: string | null; bio: string }
 type Post = { id: string; text: string; visibility: Visibility; created_at: string; user_id: string; profiles: { username: string; display_name: string | null; avatar_url: string | null }[] | null }
 type PostsStatus = 'idle' | 'loading' | 'loaded' | 'error'
+const SESSION_RESTORE_TIMEOUT_MS = 8000
 
 const visibilityComposeLabel: Record<Visibility, string> = { followers: 'フォロワー', close_friends: '親しい友達', specific: 'カスタム', private: '自分のみ' }
 const visibilityBadgeIcon: Record<Visibility, string> = { followers: '◉', close_friends: '◎', specific: '✦', private: '◐' }
@@ -33,20 +34,35 @@ export function App() {
   const [postsStatus, setPostsStatus] = useState<PostsStatus>('idle')
   const [postsError, setPostsError] = useState('')
   const [isRestoringSession, setIsRestoringSession] = useState(true)
+  const [sessionRestoreError, setSessionRestoreError] = useState('')
 
   const resolvedTheme = theme === 'system' ? (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme
 
   const ensureProfile = async (activeSession: Session | null) => {
-    if (!activeSession?.user) return setProfile(null)
+    if (!activeSession?.user) {
+      setProfile(null)
+      return
+    }
     const id = activeSession.user.id
     const metadata = activeSession.user.user_metadata ?? {}
     const emailLocalPart = activeSession.user.email?.split('@')[0] ?? 'user'
     const displayName = metadata.full_name ?? metadata.name ?? emailLocalPart
     const avatar = metadata.avatar_url ?? metadata.picture ?? null
     const username = `${emailLocalPart}_${id.replace(/-/g, '').slice(0, 6)}`
-    await supabase.from('profiles').upsert({ id, username, display_name: displayName, avatar_url: avatar, bio: '' }, { onConflict: 'id' })
-    const { data } = await supabase.from('profiles').select('id,username,display_name,avatar_url,bio').eq('id', id).single()
-    if (data) setProfile(data)
+    const fallbackProfile: Profile = { id, username, display_name: displayName, avatar_url: avatar, bio: '' }
+    const { error: upsertError } = await supabase.from('profiles').upsert(fallbackProfile, { onConflict: 'id' })
+    if (upsertError) {
+      console.error('ensureProfile upsert failed:', upsertError)
+      setProfile(fallbackProfile)
+      return
+    }
+    const { data, error: selectError } = await supabase.from('profiles').select('id,username,display_name,avatar_url,bio').eq('id', id).single()
+    if (selectError) {
+      console.error('ensureProfile select failed:', selectError)
+      setProfile(fallbackProfile)
+      return
+    }
+    setProfile(data ?? fallbackProfile)
   }
 
   const loadPosts = async () => {
@@ -63,22 +79,95 @@ export function App() {
   }
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data }) => {
-      setSession(data.session)
-      await ensureProfile(data.session)
-      if (data.session) await loadPosts()
+    let isMounted = true
+    let restoreInProgress = false
+
+    const clearSignedOutState = () => {
+      if (!isMounted) return
+      setSession(null)
+      setProfile(null)
+      setPosts([])
+      setPostsStatus('idle')
+      setPostsError('')
       setIsRestoringSession(false)
-    })
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
-      setSession(newSession)
-      await ensureProfile(newSession)
-      if (newSession) await loadPosts()
-      else {
-        setPosts([])
-        setPostsStatus('idle')
+      setScreen('home')
+    }
+
+    const runSessionRestore = async (source: 'initial' | 'auth') => {
+      if (restoreInProgress) return
+      restoreInProgress = true
+      if (isMounted) {
+        setIsRestoringSession(true)
+        setSessionRestoreError('')
+      }
+      try {
+        const { data, error } = await supabase.auth.getSession()
+        if (error) throw error
+        const activeSession = data.session
+        if (!activeSession) {
+          clearSignedOutState()
+          return
+        }
+        if (!isMounted) return
+        setSession(activeSession)
+        try {
+          await ensureProfile(activeSession)
+        } catch (profileError) {
+          console.error('ensureProfile failed:', profileError)
+        }
+        await loadPosts()
+      } catch (error) {
+        console.error(`session restore failed (${source}):`, error)
+        if (isMounted) {
+          clearSignedOutState()
+          setSessionRestoreError('読み込みに失敗しました。再読み込みしてください。')
+        }
+      } finally {
+        restoreInProgress = false
+        if (isMounted) setIsRestoringSession(false)
+      }
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      if (!isMounted) return
+      if (restoreInProgress) {
+        console.error('session restore timeout reached')
+        restoreInProgress = false
+        setIsRestoringSession(false)
+        setSessionRestoreError('読み込みに失敗しました。再読み込みしてください。')
+      }
+    }, SESSION_RESTORE_TIMEOUT_MS)
+
+    void runSessionRestore('initial')
+
+    const { data: listener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      if (!isMounted) return
+      if (event === 'SIGNED_OUT') {
+        clearSignedOutState()
+        return
+      }
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        setIsRestoringSession(true)
+        setSessionRestoreError('')
+        try {
+          setSession(newSession)
+          await ensureProfile(newSession)
+          if (newSession) await loadPosts()
+        } catch (error) {
+          console.error(`auth state handling failed (${event}):`, error)
+          if (!newSession) clearSignedOutState()
+          else setSessionRestoreError('読み込みに失敗しました。再読み込みしてください。')
+        } finally {
+          if (isMounted) setIsRestoringSession(false)
+        }
       }
     })
-    return () => listener.subscription.unsubscribe()
+
+    return () => {
+      isMounted = false
+      window.clearTimeout(timeoutId)
+      listener.subscription.unsubscribe()
+    }
   }, [])
 
   const selectedPost = useMemo(() => posts.find((post) => post.id === selectedPostId) ?? posts[0] ?? null, [posts, selectedPostId])
@@ -115,7 +204,7 @@ export function App() {
   const profileBio = profile?.bio || '自己紹介はまだありません。'
 
   if (isRestoringSession) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p>セッションを復元しています...</p></article></main></div>
-  if (!session) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p>親しい人にだけ届ける、声のタイムライン</p><button className="google-login-btn" onClick={() => supabase.auth.signInWithOAuth({ provider: 'google' })}>Googleでログイン</button></article></main></div>
+  if (!session) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p>親しい人にだけ届ける、声のタイムライン</p>{sessionRestoreError && <p className="status-message status-error">{sessionRestoreError}</p>}<button className="google-login-btn" onClick={() => supabase.auth.signInWithOAuth({ provider: 'google' })}>Googleでログイン</button></article></main></div>
 
   const renderTimelinePost = (post: Post, compact = false) => {
     const postProfile = post.profiles?.[0]
