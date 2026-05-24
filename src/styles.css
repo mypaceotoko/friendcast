@@ -374,3 +374,57 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
 .record-card{margin:0 18px 2px;padding:10px 14px 12px;min-height:148px;}
 .record-waveform{height:82px;}
 .compose-visibility-area{padding-top:10px;}
+
+/* v0.5.9-d compose + own-post header fixes */
+.compose-topbar-compact{
+  display:flex;
+  justify-content:flex-end;
+  align-items:center;
+  margin:4px 16px 2px;
+  min-height:44px;
+}
+.compose-close-button{
+  width:44px;
+  height:44px;
+  border:none;
+  border-radius:999px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:0;
+  font-size:28px;
+  line-height:1;
+  background:#ea4c78 !important;
+  color:#fff !important;
+  box-shadow:0 8px 18px rgba(234,76,120,.28);
+}
+.compose-close-button::before,
+.compose-close-button::after{content:none !important;}
+
+.compose-screen .compose-textarea{
+  height:48px;
+  min-height:48px;
+  max-height:128px;
+  padding:8px 12px !important;
+  line-height:1.5;
+  margin:0 16px;
+  resize:none;
+}
+.compose-screen .compose-counter{margin:4px 18px 2px;}
+.compose-screen .record-card{margin:2px 16px 6px;min-height:148px;padding:10px 14px 12px;}
+
+.tweet-header-row-fixed{position:relative;}
+.tweet-author-link{padding-right:116px;display:block;}
+.tweet-header-actions-floating{
+  position:absolute;
+  top:0;
+  right:0;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  min-width:0;
+}
+@media (max-width:420px){
+  .tweet-author-link{padding-right:102px;}
+  .tweet-header-actions-floating .visibility-badge{max-width:96px;font-size:10px;}
+}
