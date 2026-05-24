@@ -221,6 +221,7 @@ button { cursor: pointer; }
 .login-card p { margin: 0 0 18px; color: #42557f; }
 .google-login-btn, .logout-btn { border-radius: 999px; background: #674bb5 !important; color: #fff !important; border: 0; font-weight: 700; }
 .logout-btn { margin-top: 14px; }
+.auth-debug-line { display:block; margin-top: 6px; text-align: left; font-size: 11px; color: #42557f; word-break: break-all; }
 
 /* interactive layering fixes */
 .screen { position: relative; z-index: 1; }
