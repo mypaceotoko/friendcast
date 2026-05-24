@@ -68,6 +68,7 @@ const [postsStatus, setPostsStatus] = useState<PostsStatus>('idle')
 const [postsError, setPostsError] = useState('')
 const [initialAuthLoading, setInitialAuthLoading] = useState(true)
 const [sessionRestoreError, setSessionRestoreError] = useState('')
+const [lastAuthRedirectTo, setLastAuthRedirectTo] = useState<string>('')
 const [recordingError, setRecordingError] = useState('')
 const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null)
 const [recordedUrl, setRecordedUrl] = useState<string>('')
@@ -98,6 +99,8 @@ const composeTextareaRef = useRef<HTMLTextAreaElement | null>(null)
 const resolvedTheme = theme === 'system' ? (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme
 const isRecordSupported = typeof window !== 'undefined' && !!window.MediaRecorder && !!navigator.mediaDevices?.getUserMedia
 const sb = supabase
+const authOrigin = typeof window !== 'undefined' ? window.location.origin : ''
+const authRedirectUrl = getAuthRedirectUrl() ?? ''
 
 
 const mockAudienceCandidates: AudienceCandidate[] = [
@@ -313,7 +316,7 @@ const profileName = profile?.display_name ?? 'friendcast user'
 const formatDate = (value: string) => new Date(value).toLocaleString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 if (!isSupabaseConfigured || !supabase) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p className="status-message status-error">設定エラー: Supabaseの環境変数が不足しています。</p><p>VITE_SUPABASE_URL と VITE_SUPABASE_ANON_KEY を Vercel Preview に設定してください。</p></article></main></div>
 if (initialAuthLoading) return <div className={`app-shell theme-${resolvedTheme}`}>loading...（最大8秒）<small className="build-marker">{BUILD_MARKER}</small></div>
-if (!session) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p>親しい人にだけ届ける、声のタイムライン</p>{sessionRestoreError && <p className="status-message status-error">{sessionRestoreError}</p>}<button className="google-login-btn" onClick={() => { const redirectTo = getAuthRedirectUrl(); return supabase?.auth.signInWithOAuth(redirectTo ? { provider: 'google', options: { redirectTo } } : { provider: 'google' }) }}>Googleでログイン</button></article></main></div>
+if (!session) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p>親しい人にだけ届ける、声のタイムライン</p>{sessionRestoreError && <p className="status-message status-error">{sessionRestoreError}</p>}<button className="google-login-btn" onClick={async () => { const redirectTo = getAuthRedirectUrl(); const redirectLabel = redirectTo ?? '(undefined)'; console.log('OAuth redirectTo before Google login:', redirectLabel); setLastAuthRedirectTo(redirectLabel); await supabase?.auth.signInWithOAuth({ provider: 'google', options: redirectTo ? { redirectTo } : undefined }) }}>Googleでログイン</button><small className="auth-debug-line">build marker: {BUILD_MARKER}</small><small className="auth-debug-line">window.location.origin: {authOrigin || '(undefined)'}</small><small className="auth-debug-line">getAuthRedirectUrl(): {authRedirectUrl || '(undefined)'}</small><small className="auth-debug-line">redirectTo passed to signInWithOAuth: {lastAuthRedirectTo || '(Googleログインボタン押下待ち)'}</small></article></main></div>
 
 const handleCreatePost = async () => {
   const text = composeText.trim()

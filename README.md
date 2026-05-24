@@ -137,7 +137,11 @@ npm run dev
 
 ### Supabase側で必要な設定
 1. Auth > Providers で Google を有効化
-2. Redirect URL にローカル開発URL/本番URLを登録
+2. Redirect URL にローカル開発URL/本番URL/Preview URLを登録
+   - Preview URLは末尾スラッシュなし/ありの両方を登録することを推奨
+   - 例:
+     - `https://friendcast-xxxxx-mypaceotokogmailcoms-projects.vercel.app`
+     - `https://friendcast-xxxxx-mypaceotokogmailcoms-projects.vercel.app/`
 3. `supabase/schema.sql` を実行して `profiles` テーブルと最低限のRLSを作成
 
 ### Google OAuth設定の注意
