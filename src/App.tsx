@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { audienceLabel, type Visibility } from './mockData'
-import { supabase } from './lib/supabase'
+import { isSupabaseConfigured, supabase } from './lib/supabase'
 
 type Screen = 'home' | 'compose' | 'detail' | 'profile' | 'search' | 'settings'
 type Theme = 'dark' | 'light' | 'system'
@@ -57,7 +57,7 @@ const [isPosting, setIsPosting] = useState(false)
 const [postsStatus, setPostsStatus] = useState<PostsStatus>('idle')
 const [postsError, setPostsError] = useState('')
 const [initialAuthLoading, setInitialAuthLoading] = useState(true)
-const [sessionRestoreError] = useState('')
+const [sessionRestoreError, setSessionRestoreError] = useState('')
 const [recordingError, setRecordingError] = useState('')
 const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null)
 const [recordedUrl, setRecordedUrl] = useState<string>('')
@@ -74,6 +74,7 @@ const [audioLoadError, setAudioLoadError] = useState<Record<string, string>>({})
 const [composeCustomAudienceIds, setComposeCustomAudienceIds] = useState<string[]>([])
 const [mockCloseFriendsIds, setMockCloseFriendsIds] = useState<string[]>([])
 const isRestoringSessionRef = useRef(true)
+const INIT_TIMEOUT_MS = 8000
 const mediaRecorderRef = useRef<MediaRecorder | null>(null)
 const mediaStreamRef = useRef<MediaStream | null>(null)
 const chunksRef = useRef<BlobPart[]>([])
@@ -85,6 +86,7 @@ const composeTextareaRef = useRef<HTMLTextAreaElement | null>(null)
 
 const resolvedTheme = theme === 'system' ? (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme
 const isRecordSupported = typeof window !== 'undefined' && !!window.MediaRecorder && !!navigator.mediaDevices?.getUserMedia
+const sb = supabase
 
 
 const mockAudienceCandidates: AudienceCandidate[] = [
@@ -106,6 +108,18 @@ const toFriendlyError = (scope: 'permission' | 'storage_upload' | 'signed_url' |
   fetch: '投稿の取得に失敗しました。時間をおいて再読み込みしてください。'
 }[scope])
 
+
+const withTimeout = async <T,>(promiseLike: PromiseLike<T>, timeoutMs = 15000): Promise<T> => {
+  let timeoutId: number | undefined
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = window.setTimeout(() => reject(new Error('TIMEOUT')), timeoutMs)
+  })
+  try {
+    return await Promise.race([Promise.resolve(promiseLike), timeoutPromise])
+  } finally {
+    if (timeoutId) window.clearTimeout(timeoutId)
+  }
+}
 
 const stopRecorder = () => {
   if (recordingTimerRef.current) window.clearInterval(recordingTimerRef.current)
@@ -182,7 +196,7 @@ const handleClearRecordedAudio = () => {
 
 const loadPosts = async () => {
   setPostsStatus('loading'); setPostsError('')
-  const { data: postsData, error: postsErrorValue } = await supabase.from('posts').select('id,text,visibility,created_at,user_id,kind,audio_assets(id,post_id,storage_bucket,storage_path,mime_type,duration_ms,size_bytes)').order('created_at', { ascending: false }).limit(100)
+  const { data: postsData, error: postsErrorValue } = await sb!.from('posts').select('id,text,visibility,created_at,user_id,kind,audio_assets(id,post_id,storage_bucket,storage_path,mime_type,duration_ms,size_bytes)').order('created_at', { ascending: false }).limit(100)
   if (postsErrorValue) {
     setPosts([])
     setProfileMap({})
@@ -194,7 +208,7 @@ const loadPosts = async () => {
   setPosts(loadedPosts)
   const userIds = Array.from(new Set(loadedPosts.map((post) => post.user_id).filter(Boolean)))
   if (userIds.length === 0) { setProfileMap({}); setPostsStatus('loaded'); return }
-  const { data: profilesData, error: profilesError } = await supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', userIds)
+  const { data: profilesData, error: profilesError } = await sb!.from('profiles').select('id,username,display_name,avatar_url').in('id', userIds)
   if (profilesError) {
     setProfileMap({})
     setPostsStatus('error')
@@ -214,8 +228,8 @@ const ensureProfile = async (activeSession: Session | null) => { /* unchanged */
   const avatar = metadata.avatar_url ?? metadata.picture ?? null
   const username = `${emailLocalPart}_${id.replace(/-/g, '').slice(0, 6)}`
   const fallbackProfile: Profile = { id, username, display_name: displayName, avatar_url: avatar, bio: '' }
-  await supabase.from('profiles').upsert(fallbackProfile, { onConflict: 'id' })
-  const { data } = await supabase.from('profiles').select('id,username,display_name,avatar_url,bio').eq('id', id).single()
+  await sb!.from('profiles').upsert(fallbackProfile, { onConflict: 'id' })
+  const { data } = await sb!.from('profiles').select('id,username,display_name,avatar_url,bio').eq('id', id).single()
   setProfile(data ?? fallbackProfile)
 }
 
@@ -228,18 +242,57 @@ useEffect(() => {
   const targetId = viewingProfileId
   if (!targetId || targetId === profile?.id || profileMap[targetId]) return
   let mounted = true
-  void supabase.from('profiles').select('id,username,display_name,avatar_url,bio').eq('id', targetId).single().then(({ data }) => {
+  void sb!.from('profiles').select('id,username,display_name,avatar_url,bio').eq('id', targetId).single().then(({ data }) => {
     if (!mounted || !data) return
     setProfileMap((prev) => ({ ...prev, [data.id]: { username: data.username, display_name: data.display_name, avatar_url: data.avatar_url } }))
   })
   return () => { mounted = false }
 }, [viewingProfileId, profile?.id])
 useEffect(() => {
+  if (!supabase) {
+    setInitialAuthLoading(false)
+    isRestoringSessionRef.current = false
+    setSessionRestoreError('設定エラー: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY を確認してください。')
+    return
+  }
+
   let isMounted = true
-  const bootstrap = async () => { const { data } = await supabase.auth.getSession(); if (!isMounted) return; if (!data.session) { setInitialAuthLoading(false); isRestoringSessionRef.current = false; return } setSession(data.session); await ensureProfile(data.session); await loadPosts(); setInitialAuthLoading(false); isRestoringSessionRef.current = false }
+  const bootstrap = async () => {
+    try {
+      const { data, error } = await withTimeout(sb!.auth.getSession(), INIT_TIMEOUT_MS)
+      if (!isMounted) return
+      if (error) throw error
+      if (!data.session) return
+      setSession(data.session)
+      await withTimeout(ensureProfile(data.session), INIT_TIMEOUT_MS)
+      await withTimeout(loadPosts(), INIT_TIMEOUT_MS)
+    } catch (error) {
+      console.error('initial session restore failed', error)
+      if (isMounted) setSessionRestoreError('読み込みに失敗しました。再読み込みしても改善しない場合は設定を確認してください。')
+    } finally {
+      if (isMounted) setInitialAuthLoading(false)
+      isRestoringSessionRef.current = false
+    }
+  }
+
   void bootstrap()
-  const { data: listener } = supabase.auth.onAuthStateChange(async (_event, newSession) => { if (!isMounted || isRestoringSessionRef.current) return; setSession(newSession); if (newSession) { await ensureProfile(newSession); await loadPosts() } })
-  return () => { isMounted = false; listener.subscription.unsubscribe() }
+  const { data: listener } = sb!.auth.onAuthStateChange(async (_event, newSession) => {
+    if (!isMounted || isRestoringSessionRef.current) return
+    setSession(newSession)
+    if (!newSession) return
+    try {
+      await withTimeout(ensureProfile(newSession), INIT_TIMEOUT_MS)
+      await withTimeout(loadPosts(), INIT_TIMEOUT_MS)
+    } catch (error) {
+      console.error('auth state refresh failed', error)
+      if (isMounted) setSessionRestoreError('読み込みに失敗しました。')
+    }
+  })
+
+  return () => {
+    isMounted = false
+    listener.subscription.unsubscribe()
+  }
 }, [])
 
 const activeProfileId = viewingProfileId ?? session?.user.id ?? null
@@ -247,20 +300,9 @@ const viewedProfile = activeProfileId ? (activeProfileId === profile?.id ? profi
 const myPosts = useMemo(() => posts.filter((post) => post.user_id === activeProfileId), [posts, activeProfileId])
 const profileName = profile?.display_name ?? 'friendcast user'
 const formatDate = (value: string) => new Date(value).toLocaleString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-if (initialAuthLoading) return <div className={`app-shell theme-${resolvedTheme}`}>loading...</div>
-if (!session) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p>親しい人にだけ届ける、声のタイムライン</p>{sessionRestoreError && <p className="status-message status-error">{sessionRestoreError}</p>}<button className="google-login-btn" onClick={() => supabase.auth.signInWithOAuth({ provider: 'google' })}>Googleでログイン</button></article></main></div>
-
-const withTimeout = async <T,>(promiseLike: PromiseLike<T>, timeoutMs = 15000): Promise<T> => {
-  let timeoutId: number | undefined
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timeoutId = window.setTimeout(() => reject(new Error('TIMEOUT')), timeoutMs)
-  })
-  try {
-    return await Promise.race([Promise.resolve(promiseLike), timeoutPromise])
-  } finally {
-    if (timeoutId) window.clearTimeout(timeoutId)
-  }
-}
+if (!isSupabaseConfigured || !supabase) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p className="status-message status-error">設定エラー: Supabaseの環境変数が不足しています。</p><p>VITE_SUPABASE_URL と VITE_SUPABASE_ANON_KEY を Vercel Preview に設定してください。</p></article></main></div>
+if (initialAuthLoading) return <div className={`app-shell theme-${resolvedTheme}`}>loading...（最大8秒）</div>
+if (!session) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p>親しい人にだけ届ける、声のタイムライン</p>{sessionRestoreError && <p className="status-message status-error">{sessionRestoreError}</p>}<button className="google-login-btn" onClick={() => supabase?.auth.signInWithOAuth({ provider: 'google' })}>Googleでログイン</button></article></main></div>
 
 const handleCreatePost = async () => {
   const text = composeText.trim()
@@ -274,27 +316,27 @@ const handleCreatePost = async () => {
   if (recordedBlob) {
     storagePath = `${session.user.id}/${Date.now()}.${(recordedBlob.type.split('/')[1] || 'webm').replace('x-', '')}`
     setPostingStatusMessage('音声をアップロード中...')
-    const { error } = await withTimeout(supabase.storage.from('voice-posts').upload(storagePath, recordedBlob, { contentType: recordedBlob.type, upsert: false }))
+    const { error } = await withTimeout(sb!.storage.from('voice-posts').upload(storagePath, recordedBlob, { contentType: recordedBlob.type, upsert: false }))
     if (error) throw new Error('STORAGE_UPLOAD_FAILED')
   }
   const kind: PostKind = recordedBlob ? (text ? 'text_audio' : 'audio') : 'text'
   setPostingStatusMessage('投稿を保存中...')
-  const { data: postData, error: postError } = await withTimeout(supabase.from('posts').insert({ user_id: session.user.id, text, visibility: composeVisibility || defaultVisibility, kind }).select('id').single())
+  const { data: postData, error: postError } = await withTimeout(sb!.from('posts').insert({ user_id: session.user.id, text, visibility: composeVisibility || defaultVisibility, kind }).select('id').single())
   if (postError || !postData?.id) throw postError ?? new Error('POST_SAVE_FAILED')
   postId = postData.id
   if (recordedBlob && storagePath) {
     setPostingStatusMessage('音声情報を保存中...')
     // recordedDurationMs(録音実測ミリ秒)を audio_assets.duration_ms に保存する。
     const safeDurationMs = Number.isFinite(recordedDurationMs) && recordedDurationMs > 0 ? Math.round(recordedDurationMs) : null
-    const { error: audioError } = await withTimeout(supabase.from('audio_assets').insert({ owner_id: session.user.id, post_id: postData.id, storage_bucket: 'voice-posts', storage_path: storagePath, mime_type: recordedBlob.type, duration_ms: safeDurationMs, size_bytes: recordedBlob.size }))
+    const { error: audioError } = await withTimeout(sb!.from('audio_assets').insert({ owner_id: session.user.id, post_id: postData.id, storage_bucket: 'voice-posts', storage_path: storagePath, mime_type: recordedBlob.type, duration_ms: safeDurationMs, size_bytes: recordedBlob.size }))
     if (audioError) throw audioError
   }
     shouldGoHome = true
   await loadPosts()
   } catch (error: any) {
     console.error('create post failed', error)
-    if (postId) await supabase.from('posts').delete().eq('id', postId)
-    if (storagePath) await supabase.storage.from('voice-posts').remove([storagePath])
+    if (postId) await sb!.from('posts').delete().eq('id', postId)
+    if (storagePath) await sb!.storage.from('voice-posts').remove([storagePath])
     const message = String(error?.message ?? '')
     if (message.includes('TIMEOUT')) setErrorMessage('投稿処理がタイムアウトしました。通信状況を確認して再試行してください。')
     else if (message.toLowerCase().includes('permission')) setErrorMessage(toFriendlyError('permission'))
@@ -384,7 +426,7 @@ const renderAudioPlayer = (post: Post) => {
     let url = audioUrlMap[post.id]
     if (!url) {
       setAudioLoadState((p) => ({ ...p, [post.id]: 'loading' }))
-      const { data, error } = await supabase.storage.from(asset.storage_bucket).createSignedUrl(asset.storage_path, 60 * 30)
+      const { data, error } = await sb!.storage.from(asset.storage_bucket).createSignedUrl(asset.storage_path, 60 * 30)
       if (error || !data?.signedUrl) {
         setAudioLoadState((p) => ({ ...p, [post.id]: 'error' }))
         console.error('signed URL failed', error)
@@ -460,12 +502,12 @@ const handleDeletePost = async (post: Post) => {
   setPostActionError((prev) => ({ ...prev, [post.id]: '' }))
   try {
     if (post.audioAsset?.storage_path) {
-      const { error: storageError } = await supabase.storage.from(post.audioAsset.storage_bucket).remove([post.audioAsset.storage_path])
+      const { error: storageError } = await sb!.storage.from(post.audioAsset.storage_bucket).remove([post.audioAsset.storage_path])
       if (storageError) console.error('storage delete failed', storageError)
-      const { error: assetError } = await supabase.from('audio_assets').delete().eq('post_id', post.id).eq('owner_id', session.user.id)
+      const { error: assetError } = await sb!.from('audio_assets').delete().eq('post_id', post.id).eq('owner_id', session.user.id)
       if (assetError) console.error('audio_assets delete failed', assetError)
     }
-    const { error: postDeleteError } = await supabase.from('posts').delete().eq('id', post.id).eq('user_id', session.user.id)
+    const { error: postDeleteError } = await sb!.from('posts').delete().eq('id', post.id).eq('user_id', session.user.id)
     if (postDeleteError) throw postDeleteError
     await loadPosts()
   } catch (error) {
@@ -482,5 +524,5 @@ const resolvePostAuthor = (post: Post): PostProfile | null => {
 }
 const renderTimelinePost = (post: Post, compact = false) => { const authorProfile = resolvePostAuthor(post); const isOwnPost = post.user_id === session?.user.id && activeProfileId === session?.user.id; const displayName = authorProfile?.display_name ?? authorProfile?.username ?? 'friendcast user'; const handle = authorProfile?.username ? `@${authorProfile.username}` : '@user'; return <article key={post.id} className="tweet-item" role="article"><button className="tweet-avatar" onClick={() => goToProfile(post.user_id)} style={authorProfile?.avatar_url ? { backgroundImage: `url(${authorProfile.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}>{displayName.slice(0, 1)}</button><div className="tweet-content"><div className="tweet-header-row"><button className="tweet-header author-link" onClick={() => goToProfile(post.user_id)} type="button"><div className="author-primary"><strong>{displayName}</strong></div><span className="author-handle">{handle}</span></button><div className="tweet-header-actions"><div className="visibility-badge"><span>{visibilityBadgeIcon[post.visibility]}</span><span>{visibilityComposeLabel[post.visibility]}</span></div>{isOwnPost && <button className="post-delete-btn" aria-label="投稿を削除" disabled={deletingPostId === post.id} onClick={() => void handleDeletePost(post)}>{deletingPostId === post.id ? '…' : '🗑'}</button>}</div></div><p className="post-date">{formatDate(post.created_at)}</p><p className="tweet-text">{post.text}</p>{renderAudioPlayer(post)}{postActionError[post.id] && <p className="inline-error">{postActionError[post.id]}</p>}{!compact && <div className="delivery-inline"><small>{audienceLabel[post.visibility]}に届きます</small></div>}<div className="action-row"><button className="icon-btn" onClick={() => { setSelectedPostId(post.id); setScreen('detail') }}>💬 <span>0</span></button><button className="icon-btn">🔁 <span>0</span></button><button className={`icon-btn ${likedPostIds.includes(post.id) ? 'active-icon' : ''}`} onClick={() => setLikedPostIds((prev) => prev.includes(post.id) ? prev.filter((id) => id !== post.id) : [...prev, post.id])}>♡ <span>{likedPostIds.includes(post.id) ? 1 : 0}</span></button><button className={`icon-btn ${savedPostIds.includes(post.id) ? 'active-icon' : ''}`} onClick={() => setSavedPostIds((prev) => prev.includes(post.id) ? prev.filter((id) => id !== post.id) : [...prev, post.id])}><ShareIcon /></button></div></div></article> }
 
-return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen">{screen === 'home' && <section className="screen-home"><header className="home-mobile-header"><button className="mini-avatar" onClick={() => { setViewingProfileId(session.user.id); goToScreen('profile') }} style={profile?.avatar_url ? { backgroundImage: `url(${profile.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}>{getAvatarInitial(profileName)}</button><h1>friendcast</h1><span className="header-spacer" /></header>{postsStatus === 'error' && <p className="status-message status-error">{postsError}</p>}{posts.length === 0 && postsStatus !== 'loading' && <p className="status-message">投稿はまだありません</p>}<div className="timeline-list">{posts.map((post) => renderTimelinePost(post))}</div></section>}{screen === 'profile' && <section className="profile-screen"><div className="profile-block"><div className="profile-top-row"><div className="profile-photo" style={viewedProfile?.avatar_url ? { backgroundImage: `url(${viewedProfile.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}>{getAvatarInitial(viewedProfile?.display_name ?? viewedProfile?.username ?? 'U')}</div>{activeProfileId === session.user.id ? <button className="profile-edit-btn">プロフィールを編集</button> : <button className="profile-edit-btn">フォロー</button>}</div><h3 className="profile-name">{viewedProfile?.display_name ?? 'friendcast user'}</h3><p className="profile-id">{viewedProfile?.username ? `@${viewedProfile.username}` : '@user'}</p><p className="profile-bio">{viewedProfile?.bio || '自己紹介はまだありません。'}</p></div><div className="tabs profile-tabs"><button className={profileTab === 'posts' ? 'active-tab' : ''} onClick={() => setProfileTab('posts')}>投稿</button><button className={profileTab === 'audio' ? 'active-tab' : ''} onClick={() => setProfileTab('audio')}>ボイス</button></div><div className="timeline-list">{profilePostsToRender.map((post) => renderTimelinePost(post, true))}</div></section>}{screen === 'search' && <section className="search-screen"><article className="search-panel"><h2>検索</h2><h3>ボイスログ検索（MVP）</h3><input placeholder="キーワードで検索" disabled /><p className="status-message">検索UIはMVP調整中です。下部ナビから他画面へ移動できます。</p></article></section>}{screen === 'settings' && <section className="search-screen"><article className="search-panel"><h2>設定</h2><h3>テーマ</h3><div className="tabs"><button className={theme === 'light' ? 'active-tab' : ''} onClick={() => setTheme('light')}>ライト</button><button className={theme === 'dark' ? 'active-tab' : ''} onClick={() => setTheme('dark')}>ダーク</button></div><h3>公開範囲の初期設定</h3><div className="visibility-grid">{(['followers','close_friends','specific','private'] as Visibility[]).map((v) => <button key={v} className={`visibility-item ${defaultVisibility === v ? 'selected' : ''}`} onClick={() => setDefaultVisibility(v)}>{visibilityComposeLabel[v]}</button>)}</div><section className="friends-settings"><h3>親しい友達</h3><p className="status-message">誰に親しい友達向け投稿を届けるかを選べます（現在は準備中 / フォロー機能実装後に保存可能）。</p><p className="status-message">将来設計: close_friends(owner_id, friend_id, created_at)</p><div className="mock-audience-list">{mockAudienceCandidates.map((candidate) => <label key={candidate.id} className="mock-audience-item"><input type="checkbox" checked={mockCloseFriendsIds.includes(candidate.id)} onChange={(event) => setMockCloseFriendsIds((prev) => event.target.checked ? [...prev, candidate.id] : prev.filter((id) => id !== candidate.id))} /><span><strong>{candidate.name}</strong><small>@{candidate.username}</small></span></label>)}</div></section><p className="status-message">自分のテスト投稿は、ホーム/プロフィールの各投稿から削除できます。</p><button className="logout-btn" onClick={() => supabase.auth.signOut()}>ログアウト</button></article></section>}{screen === 'compose' && <section className="compose-screen"><div className="compose-topbar"><button className="compose-close" aria-label="ホームに戻る" onClick={() => goToScreen('home')} type="button">×</button></div><textarea ref={composeTextareaRef} rows={2} maxLength={MAX_COMPOSE_LENGTH} value={composeText} onChange={handleComposeTextChange} onInput={adjustComposeTextareaHeight} placeholder="いまどうしてる？" className="compose-textarea" /><p className={`compose-counter ${composeText.length >= MAX_COMPOSE_LENGTH ? 'is-limit' : composeText.length >= 120 ? 'is-near-limit' : ''}`}>{composeText.length} / {MAX_COMPOSE_LENGTH}</p><article className="record-card"><div className={`record-waveform ${isRecording ? 'live' : ''}`}>{Array.from({ length: 12 }).map((_, i) => <span key={i} className="record-bar" style={{ animationDelay: `${i * 0.06}s` }} />)}</div><button className={`record-fab ${isRecording ? 'recording' : ''}`} onClick={toggleRecording} type="button">🎙</button><p>{isRecording ? '録音中... タップして停止' : 'タップして録音を開始'}</p><p>{isRecording ? formatDuration(recordingSeconds * 1000) : (recordedBlob ? formatDuration(recordedDurationMs) : '')}</p>{recordedBlob && <div className="audio-preview"><button type="button" className="voice-play-button" onClick={() => { if (!previewAudioRef.current && recordedUrl) previewAudioRef.current = new Audio(recordedUrl); void previewAudioRef.current?.play() }}><span className="play-icon">▷</span><span>再生確認</span></button><button type="button" onClick={handleClearRecordedAudio}>削除</button></div>}{recordingError && <p className="compose-error-message">{recordingError}</p>}{!isRecordSupported && <p className="compose-error-message">このブラウザでは録音に対応していません</p>}</article><div className="compose-visibility-area"><p className="compose-visibility-label">公開範囲</p><div className="visibility-grid compose-visibility-grid">{(['followers','close_friends','specific','private'] as Visibility[]).map((v) => <button key={v} className={`compose-visibility-item ${composeVisibility === v ? 'selected' : ''}`} onClick={() => setComposeVisibility(v)}><span className="visibility-left"><span className="visibility-icon">{visibilityBadgeIcon[v]}</span><span><strong>{visibilityComposeLabel[v]}</strong><small>{audienceLabel[v]}</small></span></span></button>)}</div>{composeVisibility === 'specific' && <div className="custom-audience-panel"><h4>カスタム公開先</h4><p>フォロー中の人から選択できます（現在は準備中）。</p><p className="custom-audience-note">将来設計: post_audiences(post_id, viewer_id, created_at)</p><div className="mock-audience-list">{mockAudienceCandidates.map((candidate) => <label key={candidate.id} className="mock-audience-item"><input type="checkbox" checked={composeCustomAudienceIds.includes(candidate.id)} onChange={(event) => setComposeCustomAudienceIds((prev) => event.target.checked ? [...prev, candidate.id] : prev.filter((id) => id !== candidate.id))} /><span><strong>{candidate.name}</strong><small>@{candidate.username}</small></span></label>)}</div></div>}</div><div className="compose-sticky-action"><button className="compose-post-btn" disabled={(!composeText.trim() && !recordedBlob) || isPosting} onClick={handleCreatePost}>{isPosting ? '投稿中...' : '投稿する'}</button>{postingStatusMessage && <p className="compose-status-message">{postingStatusMessage}</p>}{errorMessage && <p className="compose-error-message">{errorMessage}</p>}</div></section>}</main>{showBottomNav && <nav className="bottom-nav" aria-label="メインナビ"><button className={screen === 'home' ? 'nav-active' : ''} onClick={() => goToScreen('home')}><span>🏠</span><small>ホーム</small></button><button className={screen === 'search' ? 'nav-active' : ''} onClick={() => goToScreen('search')}><span>🔎</span><small>検索</small></button><button onClick={() => goToScreen('compose')}><span>➕</span><small>投稿</small></button><button className={screen === 'profile' ? 'nav-active' : ''} onClick={() => goToScreen('profile')}><span>👤</span><small>プロフ</small></button><button className={screen === 'settings' ? 'nav-active' : ''} onClick={() => goToScreen('settings')}><span>⚙️</span><small>設定</small></button></nav>}{showGlobalFab && <button className="fab global-fab" onClick={() => goToScreen('compose')}>🎙</button>}</div>
+return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen">{screen === 'home' && <section className="screen-home"><header className="home-mobile-header"><button className="mini-avatar" onClick={() => { setViewingProfileId(session.user.id); goToScreen('profile') }} style={profile?.avatar_url ? { backgroundImage: `url(${profile.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}>{getAvatarInitial(profileName)}</button><h1>friendcast</h1><span className="header-spacer" /></header>{postsStatus === 'error' && <p className="status-message status-error">{postsError}</p>}{posts.length === 0 && postsStatus !== 'loading' && <p className="status-message">投稿はまだありません</p>}<div className="timeline-list">{posts.map((post) => renderTimelinePost(post))}</div></section>}{screen === 'profile' && <section className="profile-screen"><div className="profile-block"><div className="profile-top-row"><div className="profile-photo" style={viewedProfile?.avatar_url ? { backgroundImage: `url(${viewedProfile.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}>{getAvatarInitial(viewedProfile?.display_name ?? viewedProfile?.username ?? 'U')}</div>{activeProfileId === session.user.id ? <button className="profile-edit-btn">プロフィールを編集</button> : <button className="profile-edit-btn">フォロー</button>}</div><h3 className="profile-name">{viewedProfile?.display_name ?? 'friendcast user'}</h3><p className="profile-id">{viewedProfile?.username ? `@${viewedProfile.username}` : '@user'}</p><p className="profile-bio">{viewedProfile?.bio || '自己紹介はまだありません。'}</p></div><div className="tabs profile-tabs"><button className={profileTab === 'posts' ? 'active-tab' : ''} onClick={() => setProfileTab('posts')}>投稿</button><button className={profileTab === 'audio' ? 'active-tab' : ''} onClick={() => setProfileTab('audio')}>ボイス</button></div><div className="timeline-list">{profilePostsToRender.map((post) => renderTimelinePost(post, true))}</div></section>}{screen === 'search' && <section className="search-screen"><article className="search-panel"><h2>検索</h2><h3>ボイスログ検索（MVP）</h3><input placeholder="キーワードで検索" disabled /><p className="status-message">検索UIはMVP調整中です。下部ナビから他画面へ移動できます。</p></article></section>}{screen === 'settings' && <section className="search-screen"><article className="search-panel"><h2>設定</h2><h3>テーマ</h3><div className="tabs"><button className={theme === 'light' ? 'active-tab' : ''} onClick={() => setTheme('light')}>ライト</button><button className={theme === 'dark' ? 'active-tab' : ''} onClick={() => setTheme('dark')}>ダーク</button></div><h3>公開範囲の初期設定</h3><div className="visibility-grid">{(['followers','close_friends','specific','private'] as Visibility[]).map((v) => <button key={v} className={`visibility-item ${defaultVisibility === v ? 'selected' : ''}`} onClick={() => setDefaultVisibility(v)}>{visibilityComposeLabel[v]}</button>)}</div><section className="friends-settings"><h3>親しい友達</h3><p className="status-message">誰に親しい友達向け投稿を届けるかを選べます（現在は準備中 / フォロー機能実装後に保存可能）。</p><p className="status-message">将来設計: close_friends(owner_id, friend_id, created_at)</p><div className="mock-audience-list">{mockAudienceCandidates.map((candidate) => <label key={candidate.id} className="mock-audience-item"><input type="checkbox" checked={mockCloseFriendsIds.includes(candidate.id)} onChange={(event) => setMockCloseFriendsIds((prev) => event.target.checked ? [...prev, candidate.id] : prev.filter((id) => id !== candidate.id))} /><span><strong>{candidate.name}</strong><small>@{candidate.username}</small></span></label>)}</div></section><p className="status-message">自分のテスト投稿は、ホーム/プロフィールの各投稿から削除できます。</p><button className="logout-btn" onClick={() => sb?.auth.signOut()}>ログアウト</button></article></section>}{screen === 'compose' && <section className="compose-screen"><div className="compose-topbar"><button className="compose-close" aria-label="ホームに戻る" onClick={() => goToScreen('home')} type="button">×</button></div><textarea ref={composeTextareaRef} rows={2} maxLength={MAX_COMPOSE_LENGTH} value={composeText} onChange={handleComposeTextChange} onInput={adjustComposeTextareaHeight} placeholder="いまどうしてる？" className="compose-textarea" /><p className={`compose-counter ${composeText.length >= MAX_COMPOSE_LENGTH ? 'is-limit' : composeText.length >= 120 ? 'is-near-limit' : ''}`}>{composeText.length} / {MAX_COMPOSE_LENGTH}</p><article className="record-card"><div className={`record-waveform ${isRecording ? 'live' : ''}`}>{Array.from({ length: 12 }).map((_, i) => <span key={i} className="record-bar" style={{ animationDelay: `${i * 0.06}s` }} />)}</div><button className={`record-fab ${isRecording ? 'recording' : ''}`} onClick={toggleRecording} type="button">🎙</button><p>{isRecording ? '録音中... タップして停止' : 'タップして録音を開始'}</p><p>{isRecording ? formatDuration(recordingSeconds * 1000) : (recordedBlob ? formatDuration(recordedDurationMs) : '')}</p>{recordedBlob && <div className="audio-preview"><button type="button" className="voice-play-button" onClick={() => { if (!previewAudioRef.current && recordedUrl) previewAudioRef.current = new Audio(recordedUrl); void previewAudioRef.current?.play() }}><span className="play-icon">▷</span><span>再生確認</span></button><button type="button" onClick={handleClearRecordedAudio}>削除</button></div>}{recordingError && <p className="compose-error-message">{recordingError}</p>}{!isRecordSupported && <p className="compose-error-message">このブラウザでは録音に対応していません</p>}</article><div className="compose-visibility-area"><p className="compose-visibility-label">公開範囲</p><div className="visibility-grid compose-visibility-grid">{(['followers','close_friends','specific','private'] as Visibility[]).map((v) => <button key={v} className={`compose-visibility-item ${composeVisibility === v ? 'selected' : ''}`} onClick={() => setComposeVisibility(v)}><span className="visibility-left"><span className="visibility-icon">{visibilityBadgeIcon[v]}</span><span><strong>{visibilityComposeLabel[v]}</strong><small>{audienceLabel[v]}</small></span></span></button>)}</div>{composeVisibility === 'specific' && <div className="custom-audience-panel"><h4>カスタム公開先</h4><p>フォロー中の人から選択できます（現在は準備中）。</p><p className="custom-audience-note">将来設計: post_audiences(post_id, viewer_id, created_at)</p><div className="mock-audience-list">{mockAudienceCandidates.map((candidate) => <label key={candidate.id} className="mock-audience-item"><input type="checkbox" checked={composeCustomAudienceIds.includes(candidate.id)} onChange={(event) => setComposeCustomAudienceIds((prev) => event.target.checked ? [...prev, candidate.id] : prev.filter((id) => id !== candidate.id))} /><span><strong>{candidate.name}</strong><small>@{candidate.username}</small></span></label>)}</div></div>}</div><div className="compose-sticky-action"><button className="compose-post-btn" disabled={(!composeText.trim() && !recordedBlob) || isPosting} onClick={handleCreatePost}>{isPosting ? '投稿中...' : '投稿する'}</button>{postingStatusMessage && <p className="compose-status-message">{postingStatusMessage}</p>}{errorMessage && <p className="compose-error-message">{errorMessage}</p>}</div></section>}</main>{showBottomNav && <nav className="bottom-nav" aria-label="メインナビ"><button className={screen === 'home' ? 'nav-active' : ''} onClick={() => goToScreen('home')}><span>🏠</span><small>ホーム</small></button><button className={screen === 'search' ? 'nav-active' : ''} onClick={() => goToScreen('search')}><span>🔎</span><small>検索</small></button><button onClick={() => goToScreen('compose')}><span>➕</span><small>投稿</small></button><button className={screen === 'profile' ? 'nav-active' : ''} onClick={() => goToScreen('profile')}><span>👤</span><small>プロフ</small></button><button className={screen === 'settings' ? 'nav-active' : ''} onClick={() => goToScreen('settings')}><span>⚙️</span><small>設定</small></button></nav>}{showGlobalFab && <button className="fab global-fab" onClick={() => goToScreen('compose')}>🎙</button>}</div>
 }
