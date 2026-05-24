@@ -436,18 +436,19 @@ const adjustComposeTextareaHeight = () => {
   const textarea = composeTextareaRef.current
   if (!textarea) return
   textarea.style.height = 'auto'
-  const nextHeight = Math.min(textarea.scrollHeight, 136)
-  textarea.style.height = `${Math.max(nextHeight, 56)}px`
+  const nextHeight = Math.min(textarea.scrollHeight, 128)
+  textarea.style.height = `${Math.max(nextHeight, 48)}px`
 }
 const handleComposeTextChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
   setComposeText(event.target.value.slice(0, MAX_COMPOSE_LENGTH))
 }
 
 useEffect(() => {
-  if (screen === 'compose') {
-    safeScrollToTop()
-    adjustComposeTextareaHeight()
-  }
+  if (screen === 'compose') safeScrollToTop()
+}, [screen])
+
+useEffect(() => {
+  if (screen === 'compose') adjustComposeTextareaHeight()
 }, [screen, composeText])
 
 
