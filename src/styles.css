@@ -243,6 +243,14 @@ button { cursor: pointer; }
 .global-fab{bottom:calc(112px + env(safe-area-inset-bottom));}
 .compose-sticky-action{padding-bottom:calc(18px + env(safe-area-inset-bottom));}
 
+.audio-main{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0;}
+.audio-meta-row{display:flex;align-items:center;gap:8px;}
+.audio-seek-row{display:flex;align-items:center;gap:8px;min-height:36px;}
+.audio-seek{flex:1;min-width:0;height:28px;accent-color:#7a63d6;}
+.audio-seek-step{border:0;border-radius:999px;background:rgba(103,75,181,.14)!important;color:#6046b2!important;font-size:12px;font-weight:700;min-width:48px;min-height:32px;padding:0 8px;}
+.audio-seek-step:disabled{opacity:.45;}
+.audio-seek:disabled{opacity:.55;}
+.theme-dark .audio-seek-step{background:rgba(145,124,234,.2)!important;color:#cfbeff!important;}
 /* v0.5.4 layout fixes */
 .tweet-content,.tweet-header-row,.tweet-header,.author-link{min-width:0;}
 .tweet-header-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:8px;}
