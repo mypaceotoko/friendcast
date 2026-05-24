@@ -331,3 +331,20 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
 .mock-audience-item span{display:flex;flex-direction:column;line-height:1.2;}
 .mock-audience-item small{color:#5f688a;}
 .profile-photo{display:grid;place-items:center;font-size:34px;font-weight:700;color:#fff;background-size:cover;background-position:center;}
+
+/* v0.5.9 timeline date clipping fix */
+.tweet-item{overflow:visible;}
+.tweet-content{min-width:0;overflow:visible;}
+.tweet-header-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;column-gap:8px;row-gap:2px;}
+.author-link{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;min-width:0;overflow:visible;}
+.author-primary,.author-handle{min-width:0;max-width:100%;}
+.author-primary strong,.author-handle{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.post-date{display:block;width:100%;min-width:0;margin:2px 0 8px;padding-left:0.5px;color:#6c7598;font-size:12px;line-height:1.35;overflow:visible;text-overflow:clip;white-space:nowrap;}
+.tweet-header-actions{display:flex;align-items:flex-start;gap:6px;min-width:max-content;flex-wrap:wrap;justify-self:end;}
+.visibility-badge{max-width:132px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+@media (max-width:430px){
+  .tweet-item{grid-template-columns:44px minmax(0,1fr);}
+  .tweet-header-actions{flex-direction:column;align-items:flex-end;}
+  .visibility-badge{max-width:110px;}
+  .post-date{font-size:11px;}
+}
