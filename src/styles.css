@@ -310,15 +310,15 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
 }
 
 .compose-screen{padding-bottom:calc(86px + env(safe-area-inset-bottom));}
-.compose-topbar{position:static;padding:6px 16px 2px;justify-content:flex-start;background:transparent;border-bottom:0;backdrop-filter:none;}
-.compose-textarea{min-height:56px;max-height:136px;font-size:18px;line-height:1.5;padding:4px 18px 2px!important;resize:none;overflow-y:auto;}
-.compose-counter{padding:0 20px 2px;font-size:13px;position:static;}
-.record-card{margin:4px 18px;padding:12px 14px 14px;min-height:178px;gap:8px;border-radius:28px;}
+.compose-topbar{position:static;padding:2px 14px 0;justify-content:flex-start;background:transparent;border-bottom:0;backdrop-filter:none;}
+.compose-textarea{min-height:48px;max-height:128px;font-size:17px;line-height:1.45;padding:2px 18px 2px!important;resize:none;overflow-y:auto;}
+.compose-counter{padding:0 20px 0;font-size:13px;position:static;}
+.record-card{margin:2px 18px 4px;padding:10px 14px 12px;min-height:168px;gap:8px;border-radius:24px;}
 .record-waveform{height:92px;gap:9px;margin-top:0;}
 .record-fab{width:74px;height:74px;font-size:30px;}
 .record-card p{font-size:14px;}
 .compose-visibility-area{margin:0 18px;padding-top:12px;padding-bottom:12px;}
-.compose-close{width:44px;height:44px;font-size:28px;background:rgba(120,124,140,.88)!important;color:#fff!important;box-shadow:none;}
+.compose-close{width:44px;height:44px;font-size:24px;background:rgba(120,124,140,.88)!important;color:#fff!important;box-shadow:none;}
 
 .post-date{margin:0;font-size:12px;line-height:1.3;color:#6a6a7a;}
 .tweet-header-row{margin-bottom:2px;}
