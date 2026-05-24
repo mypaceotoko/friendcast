@@ -355,3 +355,22 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
   .visibility-badge{max-width:110px;}
   .post-date{font-size:11px;}
 }
+
+/* v0.5.9-c compact compose + own-post header alignment */
+.tweet-header-row{grid-template-columns:minmax(0,1fr) auto;align-items:start;column-gap:8px;row-gap:2px;}
+.tweet-header-actions{display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;gap:6px;justify-self:end;align-self:start;min-width:0;}
+.visibility-badge{margin-top:0;max-width:108px;padding:3px 8px;font-size:11px;}
+.post-delete-btn{inline-size:32px;block-size:32px;min-width:32px;min-height:32px;padding:0;border-radius:999px;border:1px solid #e1b7ca;background:#fff1f7!important;color:#a32956!important;font-size:14px;line-height:1;display:grid;place-items:center;}
+.post-date{margin:2px 0 8px;}
+@media (max-width:430px){
+  .tweet-header-actions{flex-direction:row;align-items:center;}
+  .visibility-badge{max-width:96px;}
+}
+
+.compose-topbar{padding:4px 14px 0;justify-content:flex-end;}
+.compose-close{background:#ea4c78!important;color:#fff!important;font-size:28px;box-shadow:0 6px 14px rgba(234,76,120,.26);}
+.compose-textarea{min-height:46px;max-height:136px;line-height:1.4;padding:0 18px 2px!important;}
+.compose-counter{padding:0 20px 2px;}
+.record-card{margin:0 18px 2px;padding:10px 14px 12px;min-height:148px;}
+.record-waveform{height:82px;}
+.compose-visibility-area{padding-top:10px;}
