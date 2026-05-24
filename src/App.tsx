@@ -34,6 +34,16 @@ const safeScrollToTop = () => {
   window.scrollTo(0, 0)
 }
 
+const getAuthRedirectUrl = () => {
+  if (typeof window === 'undefined') return undefined
+  if (!window.location?.origin) return undefined
+  try {
+    return new URL('/', window.location.origin).toString()
+  } catch {
+    return undefined
+  }
+}
+
 export function App() {
 const [screen, setScreen] = useState<Screen>('home')
 const [composeText, setComposeText] = useState('')
@@ -303,7 +313,7 @@ const profileName = profile?.display_name ?? 'friendcast user'
 const formatDate = (value: string) => new Date(value).toLocaleString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 if (!isSupabaseConfigured || !supabase) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p className="status-message status-error">設定エラー: Supabaseの環境変数が不足しています。</p><p>VITE_SUPABASE_URL と VITE_SUPABASE_ANON_KEY を Vercel Preview に設定してください。</p></article></main></div>
 if (initialAuthLoading) return <div className={`app-shell theme-${resolvedTheme}`}>loading...（最大8秒）<small className="build-marker">{BUILD_MARKER}</small></div>
-if (!session) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p>親しい人にだけ届ける、声のタイムライン</p>{sessionRestoreError && <p className="status-message status-error">{sessionRestoreError}</p>}<button className="google-login-btn" onClick={() => supabase?.auth.signInWithOAuth({ provider: 'google' })}>Googleでログイン</button></article></main></div>
+if (!session) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p>親しい人にだけ届ける、声のタイムライン</p>{sessionRestoreError && <p className="status-message status-error">{sessionRestoreError}</p>}<button className="google-login-btn" onClick={() => { const redirectTo = getAuthRedirectUrl(); return supabase?.auth.signInWithOAuth(redirectTo ? { provider: 'google', options: { redirectTo } } : { provider: 'google' }) }}>Googleでログイン</button></article></main></div>
 
 const handleCreatePost = async () => {
   const text = composeText.trim()
