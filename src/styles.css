@@ -1090,3 +1090,21 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
   .audio-card,.profile-voice-card{width:100%;}
   .subdued-handle{max-width:140px;}
 }
+
+.post-detail-screen {
+  padding: 0 0 96px;
+}
+.post-detail-top {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  backdrop-filter: blur(8px);
+  background: color-mix(in srgb, var(--bg-card, #fff) 75%, transparent);
+  padding: 8px 12px;
+}
+.post-card-detail {
+  margin-top: 8px;
+}
+.post-card-detail .comments-panel {
+  display: block;
+}
