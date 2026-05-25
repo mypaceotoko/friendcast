@@ -637,3 +637,78 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
 .repost-meta { display:block; margin: 0 0 8px 52px; border:0; background:transparent; color: var(--muted-text, #8b98a5); font-size:12px; text-align:left; cursor:pointer; padding:0; }
 .repost-meta:hover { text-decoration: underline; }
 
+
+/* v0.6.1 home feed mobile width fix */
+.screen-home {
+  padding-bottom: calc(170px + env(safe-area-inset-bottom));
+}
+
+.timeline-list {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.tweet-item,
+.post-card {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 16px 0 14px;
+}
+
+.tweet-avatar,
+.post-avatar {
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+}
+
+.tweet-content,
+.post-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.tweet-author-link,
+.author-primary,
+.author-handle,
+.post-date,
+.tweet-text,
+.post-user,
+.post-meta,
+.post-text {
+  width: 100%;
+  min-width: 0;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
+  writing-mode: horizontal-tb;
+}
+
+@media (max-width: 430px) {
+  .timeline-list {
+    padding: 12px;
+  }
+
+  .tweet-item,
+  .post-card {
+    gap: 10px;
+    padding: 14px 0 12px;
+  }
+
+  .tweet-avatar,
+  .post-avatar {
+    flex-basis: 44px;
+    width: 44px;
+    height: 44px;
+  }
+}
