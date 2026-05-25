@@ -712,3 +712,101 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
     height: 44px;
   }
 }
+
+/* rebuilt home post card layout for narrow Safari widths */
+.screen-home .timeline-list{
+  width:100%;
+  max-width:720px;
+  margin:0 auto;
+  padding:16px 16px calc(120px + env(safe-area-inset-bottom));
+  box-sizing:border-box;
+  overflow-x:hidden;
+}
+.screen-home .post-card{
+  width:100%;
+  max-width:100%;
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  box-sizing:border-box;
+  overflow:hidden;
+  border-radius:20px;
+}
+.screen-home .post-header{
+  width:100%;
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  box-sizing:border-box;
+  min-width:0;
+}
+.screen-home .post-avatar{
+  width:48px;
+  height:48px;
+  flex:0 0 48px;
+  border-radius:50%;
+  object-fit:cover;
+}
+.screen-home .post-header-main{
+  flex:1;
+  min-width:0;
+  max-width:100%;
+}
+.screen-home .post-user-line{
+  display:flex;
+  flex-wrap:wrap;
+  gap:4px;
+  min-width:0;
+  max-width:100%;
+}
+.screen-home .post-header-actions{
+  display:flex;
+  align-items:flex-start;
+  gap:6px;
+  margin-left:auto;
+  flex:0 0 auto;
+}
+.screen-home .post-delete-button{
+  position:static;
+  margin-left:0;
+  flex:0 0 auto;
+}
+.screen-home .post-content,
+.screen-home .post-actions{
+  width:100%;
+  max-width:100%;
+  box-sizing:border-box;
+  padding-left:60px;
+}
+.screen-home .post-content{margin-top:12px;}
+.screen-home .post-actions{
+  display:flex;
+  align-items:center;
+  gap:24px;
+  margin-top:16px;
+}
+.screen-home .post-user-name,
+.screen-home .post-action-text,
+.screen-home .post-date,
+.screen-home .post-text,
+.screen-home .post-sub-text{
+  writing-mode:horizontal-tb;
+  white-space:normal;
+  word-break:normal;
+  overflow-wrap:break-word;
+  max-width:100%;
+}
+.screen-home .tweet-author-link{
+  padding-right:0;
+}
+.screen-home .post-date{
+  display:block;
+  margin-top:4px;
+}
+
+@media (max-width: 430px) {
+  .screen-home .timeline-list{padding:12px 12px calc(120px + env(safe-area-inset-bottom));}
+  .screen-home .post-avatar{width:44px;height:44px;flex-basis:44px;}
+  .screen-home .post-content,
+  .screen-home .post-actions{padding-left:56px;}
+}
