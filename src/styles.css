@@ -296,6 +296,11 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
 .soft-action-button{width:auto;min-height:36px;padding:8px 12px;border-radius:999px;border:1px solid rgba(103,75,181,.3);background:rgba(244,238,255,.95)!important;color:#5a42a7!important;font-size:12px;font-weight:700;}
 .theme-dark .onboarding-card,.theme-dark .empty-state-card,.theme-dark .invite-pending-card{background:rgba(26,31,52,.9);border-color:rgba(143,127,214,.38);}
 .theme-dark .onboarding-card p,.theme-dark .empty-state-card p,.theme-dark .invite-pending-card p,.theme-dark .onboarding-card ol{color:#c3ccef;}
+.invite-close-friend-card{gap:10px;}
+.invite-close-friend-row{display:flex;align-items:center;gap:10px;}
+.invite-close-friend-row p{margin:0;font-size:13px;}
+.invite-close-friend-add-btn{background:#6e5bd4;border-color:#6e5bd4;color:#fff;}
+.invite-close-friend-add-btn:disabled{opacity:.8;}
 .search-status{padding:10px 0;}
 .discover-list{display:flex;flex-direction:column;gap:8px;}
 .discover-user-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid rgba(122,117,131,.14);}
