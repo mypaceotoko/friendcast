@@ -1107,3 +1107,14 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
   .subdued-handle{max-width:140px;}
 }
 
+
+.comment-delete-btn{
+  inline-size:28px;
+  block-size:28px;
+  min-width:36px;
+  min-height:36px;
+  font-size:13px;
+  border-color:#e3c0d4;
+  background:rgba(255,243,249,.95)!important;
+  color:#a74471!important;
+}
