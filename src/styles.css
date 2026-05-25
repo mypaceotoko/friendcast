@@ -633,3 +633,7 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
   background:#505477;
   color:#dbe1ff;
 }
+
+.repost-meta { display:block; margin: 0 0 8px 52px; border:0; background:transparent; color: var(--muted-text, #8b98a5); font-size:12px; text-align:left; cursor:pointer; padding:0; }
+.repost-meta:hover { text-decoration: underline; }
+
