@@ -901,3 +901,10 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
   .profile-screen .post-content,
   .profile-screen .post-actions{padding-left:56px;}
 }
+
+.invite-settings{border:1px solid rgba(122,117,131,.2);border-radius:14px;padding:10px 12px;margin-top:10px;background:rgba(255,255,255,.62);}
+.theme-dark .invite-settings{background:rgba(24,31,52,.7);border-color:rgba(129,153,220,.35);}
+.invite-row,.invite-use-row{display:flex;gap:8px;align-items:center;margin:8px 0;}
+.invite-use-row input{flex:1;margin:0;}
+.invite-list{display:grid;gap:8px;margin-top:8px;}
+.invite-actions{display:flex;flex-direction:column;gap:6px;}
