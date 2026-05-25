@@ -42,12 +42,21 @@ create table if not exists public.audio_assets (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.follows (
+  follower_id uuid not null references public.profiles(id) on delete cascade,
+  following_id uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (follower_id, following_id),
+  constraint follows_no_self_follow check (follower_id <> following_id)
+);
+
 create index if not exists idx_audio_assets_post_id on public.audio_assets(post_id);
 create index if not exists idx_audio_assets_owner_id on public.audio_assets(owner_id);
 
 alter table public.profiles enable row level security;
 alter table public.posts enable row level security;
 alter table public.audio_assets enable row level security;
+alter table public.follows enable row level security;
 
 drop policy if exists "profiles_select_own" on public.profiles;
 drop policy if exists "profiles_select_authenticated" on public.profiles;
@@ -76,9 +85,17 @@ create policy "audio_assets_insert_own" on public.audio_assets for insert to aut
 create policy "audio_assets_update_own" on public.audio_assets for update to authenticated using (auth.uid() = owner_id) with check (auth.uid() = owner_id);
 create policy "audio_assets_delete_own" on public.audio_assets for delete to authenticated using (auth.uid() = owner_id);
 
+drop policy if exists "follows_select_authenticated" on public.follows;
+drop policy if exists "follows_insert_own" on public.follows;
+drop policy if exists "follows_delete_own" on public.follows;
+create policy "follows_select_authenticated" on public.follows for select to authenticated using (true);
+create policy "follows_insert_own" on public.follows for insert to authenticated with check (auth.uid() = follower_id);
+create policy "follows_delete_own" on public.follows for delete to authenticated using (auth.uid() = follower_id);
+
 grant select, insert, update, delete on public.profiles to authenticated;
 grant select, insert, update, delete on public.posts to authenticated;
 grant select, insert, update, delete on public.audio_assets to authenticated;
+grant select, insert, delete on public.follows to authenticated;
 
 -- Storage bucket/policies (run in Supabase SQL editor)
 insert into storage.buckets (id, name, public)
