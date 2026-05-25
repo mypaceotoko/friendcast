@@ -483,3 +483,91 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
 
 .build-marker { position: fixed; left: 10px; bottom: calc(8px + env(safe-area-inset-bottom)); z-index: 200; font-size: 10px; letter-spacing: .02em; color: rgba(58, 59, 79, .72); background: rgba(255, 255, 255, .7); border: 1px solid rgba(106, 76, 199, .22); border-radius: 999px; padding: 3px 8px; pointer-events: none; }
 .theme-dark .build-marker { color: rgba(227, 233, 255, .75); background: rgba(14, 18, 31, .72); border-color: rgba(137, 146, 192, .35); }
+
+/* v0.6.0 compose UI compact improvements */
+.compose-screen{
+  padding-bottom: calc(84px + env(safe-area-inset-bottom));
+}
+.compose-topbar-compact{
+  margin: 2px 14px 0;
+  min-height: 40px;
+}
+.compose-screen .compose-textarea{
+  min-height: 48px;
+  max-height: 120px;
+  margin: 0 14px;
+  padding: 8px 12px !important;
+  border-radius: 14px;
+  background: rgba(255,255,255,.72) !important;
+}
+.theme-dark .compose-screen .compose-textarea{
+  background: rgba(31,37,58,.7) !important;
+}
+.compose-screen .compose-counter{
+  margin: 2px 16px 0;
+}
+.compose-screen .record-card{
+  margin: 2px 14px 4px;
+  min-height: 130px;
+  padding: 10px 12px 10px;
+  border-radius: 20px;
+  gap: 6px;
+  overflow: hidden;
+}
+.record-waveform{
+  height: 56px;
+  margin-top: 6px;
+  align-items: flex-end;
+}
+.record-bar{
+  width: 8px;
+  border-radius: 999px;
+}
+.compose-visibility-area{
+  margin: 0 14px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.compose-visibility-label{
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+.visibility-chip-group{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.visibility-chip{
+  border:1.5px solid #cdc6de;
+  background:#f5f4fb;
+  color:#3f3c52;
+  min-height:44px;
+  padding:10px 14px;
+  border-radius:999px;
+  font-size:14px;
+  font-weight:700;
+}
+.theme-dark .visibility-chip{
+  border-color:#495377;
+  background:#20263d;
+  color:#e5eaff;
+}
+.visibility-chip.active{
+  border-color:#7a5bdf;
+  background:linear-gradient(145deg,#7c54f0,#9d60ff);
+  color:#fff;
+  box-shadow:0 8px 14px rgba(108,76,210,.24);
+}
+.custom-audience-inline-note{
+  margin:8px 2px 0;
+  color:#626178;
+  font-size:12px;
+}
+.theme-dark .custom-audience-inline-note{color:#aab5dd;}
+.compose-sticky-action{
+  padding:8px 14px calc(12px + env(safe-area-inset-bottom));
+}
+.compose-screen .compose-post-btn{
+  min-height:50px;
+  border-radius:12px;
+}
