@@ -308,3 +308,40 @@ with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()
 
 create policy "avatars_delete_own" on storage.objects for delete to authenticated
 using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- friendcast v0.7.7-a: comments voice-reply preparation (idempotent)
+alter table public.comments
+  add column if not exists comment_type text not null default 'text';
+
+alter table public.comments
+  add column if not exists audio_url text;
+
+alter table public.comments
+  add column if not exists audio_duration_seconds integer;
+
+alter table public.comments
+  drop constraint if exists comments_body_length;
+
+alter table public.comments
+  drop constraint if exists comments_type_check;
+
+alter table public.comments
+  drop constraint if exists comments_content_check;
+
+alter table public.comments
+  add constraint comments_type_check
+  check (comment_type in ('text', 'voice'));
+
+alter table public.comments
+  add constraint comments_content_check
+  check (
+    (
+      comment_type = 'text'
+      and char_length(trim(coalesce(body, ''))) between 1 and 140
+    )
+    or
+    (
+      comment_type = 'voice'
+      and char_length(trim(coalesce(audio_url, ''))) > 0
+    )
+  );
