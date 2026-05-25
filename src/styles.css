@@ -128,8 +128,9 @@ button { cursor: pointer; }
 .theme-light .compose-screen .confirm-line { color: #445a89; }
 .theme-dark .compose-screen .confirm-line { color: #9fb6ff; }
 
-.home-mobile-header { position: sticky; top: 0; z-index: 50; display:flex; align-items:center; justify-content: space-between; padding: 10px 16px; min-height: 64px; background: rgba(249,249,255,.88); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(122,117,131,.2); }
-.home-brand-logo { width: clamp(190px, 50vw, 300px); max-width: 100%; height: auto; display: block; flex: 1; margin: 0 10px; }
+.home-mobile-header { position: sticky; top: 0; z-index: 50; display:grid; grid-template-columns: 42px minmax(0, 1fr) 42px; align-items:center; gap: 12px; padding: 10px 16px; min-height: 64px; background: rgba(249,249,255,.88); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(122,117,131,.2); }
+.home-brand-slot { min-width: 0; display:flex; justify-content: center; align-items: center; }
+.home-brand-logo { width: clamp(170px, 48vw, 300px); max-width: 100%; height: auto; display: block; margin: 0 auto; }
 .friendcast-logo-text { font-family: Georgia, "Times New Roman", serif; font-size: 118px; font-weight: 800; letter-spacing: .015em; paint-order: stroke; stroke: rgba(63, 37, 122, .22); stroke-width: 2.2px; filter: drop-shadow(0 1px 0 rgba(255,255,255,.32)) drop-shadow(0 2px 6px rgba(88,58,156,.18)); }
 .mini-avatar { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg,#e0bba8,#b8c9ff); border: 2px solid #efe7de; padding: 0; font-size: 15px; }
 .header-spacer { width: 42px; height: 42px; flex-shrink: 0; }
