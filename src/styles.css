@@ -1186,3 +1186,35 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
 .friend-suggestions-empty{
   margin-top: 10px;
 }
+
+.comment-reply-tabs{
+  display:flex;
+  gap:8px;
+  margin-bottom:10px;
+}
+.comment-reply-tab{
+  flex:1;
+  border:1px solid #d4c5f7;
+  background:#f6f1ff;
+  color:#5e4b8b;
+  border-radius:999px;
+  padding:8px 10px;
+  font-weight:600;
+}
+.comment-reply-tab.active-tab{
+  background:#e8dcff;
+  border-color:#b59ff0;
+}
+.voice-reply-panel{
+  border:1px solid #d9cdf8;
+  background:#faf7ff;
+  border-radius:12px;
+  padding:10px;
+  margin-bottom:10px;
+}
+.voice-reply-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin:8px 0;
+}
