@@ -1118,3 +1118,55 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
   background:rgba(255,243,249,.95)!important;
   color:#a74471!important;
 }
+
+/* v0.7.6-c audio player right-edge clipping fix */
+.post-content,
+.post-body,
+.comments-panel,
+.comment-input-row,
+.comment-input-row input,
+.comment-input-row textarea{
+  box-sizing:border-box;
+  width:100%;
+  max-width:100%;
+  min-width:0;
+}
+
+.audio-card,
+.profile-voice-card{
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  margin:8px 0;
+  box-sizing:border-box;
+  overflow:hidden;
+}
+
+.audio-main,
+.audio-meta-row,
+.audio-seek-row,
+.audio-wave{
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  box-sizing:border-box;
+}
+
+.audio-seek-row{
+  gap:8px;
+  justify-content:space-between;
+  flex-wrap:nowrap;
+}
+
+.audio-seek-step,
+.audio-speed-btn{
+  flex:1 1 0;
+  min-width:0;
+}
+
+.audio-duration{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
