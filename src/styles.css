@@ -255,10 +255,8 @@ button { cursor: pointer; }
 .audio-main{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0;}
 .audio-meta-row{display:flex;align-items:center;gap:8px;}
 .audio-seek-row{display:flex;align-items:center;gap:8px;min-height:36px;}
-.audio-seek{flex:1;min-width:0;height:28px;accent-color:#7a63d6;}
 .audio-seek-step{border:0;border-radius:999px;background:rgba(103,75,181,.14)!important;color:#6046b2!important;font-size:12px;font-weight:700;min-width:48px;min-height:32px;padding:0 8px;}
 .audio-seek-step:disabled{opacity:.45;}
-.audio-seek:disabled{opacity:.55;}
 .theme-dark .audio-seek-step{background:rgba(145,124,234,.2)!important;color:#cfbeff!important;}
 .follow-btn{width:auto;min-height:30px;padding:4px 10px;border-radius:999px;border:1px solid rgba(103,75,181,.4);background:rgba(103,75,181,.12)!important;color:#5f44b1!important;font-size:12px;font-weight:700;white-space:nowrap;}
 .follow-btn.is-following,.profile-edit-btn.is-following{background:rgba(103,75,181,.18)!important;color:#4b358e!important;border-color:rgba(103,75,181,.55)!important;}
@@ -509,8 +507,8 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
 .audio-wave:disabled{opacity:.6;cursor:not-allowed;}
 .audio-wave i{opacity:.5;transition:opacity .2s ease,filter .2s ease;}
 .audio-wave i.is-past{opacity:1;filter:saturate(1.2);}
-.audio-seek-row{gap:6px;flex-wrap:nowrap;}
-.audio-seek-step,.audio-speed-btn{min-height:44px;padding:0 10px;border-radius:999px;font-weight:700;border:0;}
+.audio-seek-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:nowrap;}
+.audio-seek-step,.audio-speed-btn{min-height:44px;padding:0 12px;border-radius:999px;font-weight:700;border:0;flex:1;min-width:0;}
 .audio-speed-btn{background:rgba(103,75,181,.2)!important;color:#50339f!important;min-width:56px;}
 .theme-dark .audio-speed-btn{background:rgba(145,124,234,.25)!important;color:#e0d4ff!important;}
 .compose-current-visibility{margin:8px 24px 6px;font-size:13px;color:#5e6285;}
