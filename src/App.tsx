@@ -984,17 +984,25 @@ useEffect(() => {
   void loadRepostsForPosts(postIds, userId)
 }, [posts, session?.user.id])
 
-if (!isSupabaseConfigured || !supabase) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p className="status-message status-error">設定エラー: Supabaseの環境変数が不足しています。</p><p>VITE_SUPABASE_URL と VITE_SUPABASE_ANON_KEY を Vercel Preview に設定してください。</p></article></main></div>
-if (initialAuthLoading) return <div className={`app-shell theme-${resolvedTheme}`}><div className="login-card"><h1>friendcast</h1><p>ログイン状態を確認中です...（最大8秒）</p></div></div>
 useEffect(() => {
   if (typeof window === 'undefined') return
-  const code = normalizeInviteCode(new URLSearchParams(window.location.search).get('invite') ?? '')
-  if (code) localStorage.setItem(PENDING_INVITE_KEY, code)
-  const pending = normalizeInviteCode(localStorage.getItem(PENDING_INVITE_KEY) ?? '')
-  if (pending) { setPendingInviteCode(pending); setInviteCodeInput((prev) => prev || pending) }
+  try {
+    const params = new URLSearchParams(window.location.search)
+    const inviteParam = normalizeInviteCode(params.get('invite') ?? '')
+    if (inviteParam) window.localStorage.setItem(PENDING_INVITE_KEY, inviteParam)
+    const pending = normalizeInviteCode(window.localStorage.getItem(PENDING_INVITE_KEY) ?? '')
+    if (!pending) return
+    setPendingInviteCode(pending)
+    setInviteCodeInput((prev) => prev || pending)
+  } catch (error) {
+    console.warn('Failed to restore pending invite code', error)
+  }
 }, [])
 
 useEffect(() => { if (session?.user?.id) void loadMyInvites() }, [session?.user?.id])
+
+if (!isSupabaseConfigured || !supabase) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p className="status-message status-error">設定エラー: Supabaseの環境変数が不足しています。</p><p>VITE_SUPABASE_URL と VITE_SUPABASE_ANON_KEY を Vercel Preview に設定してください。</p></article></main></div>
+if (initialAuthLoading) return <div className={`app-shell theme-${resolvedTheme}`}><div className="login-card"><h1>friendcast</h1><p>ログイン状態を確認中です...（最大8秒）</p></div></div>
 
 if (!session) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p>親しい人にだけ届ける、声のタイムライン</p>{sessionRestoreError && <p className="status-message status-error">{sessionRestoreError}</p>}<button className="google-login-btn" onClick={async () => { const redirectTo = getAuthRedirectUrl(); await supabase?.auth.signInWithOAuth({ provider: 'google', options: redirectTo ? { redirectTo } : undefined }) }}>Googleでログイン</button></article></main></div>
 
@@ -1216,18 +1224,25 @@ const handleDeleteComment = async (postId: string, comment: CommentRow) => {
 }
 
 const loadMyInvites = async () => {
-  if (!session?.user?.id) return
-  const { data, error } = await sb!.from('invites').select('id,inviter_id,code,used_by,used_at,created_at,expires_at,status').eq('inviter_id', session.user.id).order('created_at', { ascending: false })
-  if (!error) setMyInvites((data ?? []) as InviteRow[])
+  if (!sb || !session?.user?.id) return
+  const { data, error } = await sb.from('invites').select('id,inviter_id,code,used_by,used_at,created_at,expires_at,status').eq('inviter_id', session.user.id).order('created_at', { ascending: false })
+  if (error) {
+    console.error('load invites failed', error)
+    setInviteActionError('招待コード一覧の取得に失敗しました。時間をおいて再試行してください。')
+    setMyInvites([])
+    return
+  }
+  setInviteActionError('')
+  setMyInvites(Array.isArray(data) ? (data as InviteRow[]) : [])
 }
 
 const createInviteCode = async () => {
-  if (!session?.user?.id || isInviteCreating) return
+  if (!sb || !session?.user?.id || isInviteCreating) return
   setIsInviteCreating(true); setInviteActionError(''); setInviteActionMessage('')
   for (let i = 0; i < 5; i += 1) {
     const code = generateInviteCode()
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-    const { error } = await sb!.from('invites').insert({ inviter_id: session.user.id, code, status: 'active', expires_at: expiresAt })
+    const { error } = await sb.from('invites').insert({ inviter_id: session.user.id, code, status: 'active', expires_at: expiresAt })
     if (!error) {
       setInviteActionMessage('招待コードを作成しました。')
       await loadMyInvites()
@@ -1248,22 +1263,34 @@ const copyText = async (text: string, message: string) => {
 }
 
 const useInviteCode = async (rawCode?: string) => {
-  if (!session?.user?.id || isInviteUsing) return
+  if (!sb || !session?.user?.id || isInviteUsing) return
   const code = normalizeInviteCode(rawCode ?? inviteCodeInput)
   if (!code) return setInviteActionError('招待コードを入力してください。')
   setIsInviteUsing(true); setInviteActionError(''); setInviteActionMessage('')
-  const { data, error } = await sb!.from('invites').select('id,inviter_id,code,status,used_by').eq('code', code).maybeSingle()
+  const { data, error } = await sb.from('invites').select('id,inviter_id,code,status,used_by').eq('code', code).maybeSingle()
   if (error || !data) { setInviteActionError('招待コードが見つかりません。'); setIsInviteUsing(false); return }
   if (data.inviter_id === session.user.id) { setInviteActionError('自分の招待コードは使えません。'); setIsInviteUsing(false); return }
   if (data.status !== 'active' || data.used_by) { setInviteActionError('この招待コードは使用済みです。'); setIsInviteUsing(false); return }
-  const { error: upErr } = await sb!.from('invites').update({ used_by: session.user.id, used_at: new Date().toISOString(), status: 'used' }).eq('id', data.id).eq('status', 'active').is('used_by', null)
+  const { error: upErr } = await sb.from('invites').update({ used_by: session.user.id, used_at: new Date().toISOString(), status: 'used' }).eq('id', data.id).eq('status', 'active').is('used_by', null)
   if (upErr) { setInviteActionError('招待コードの利用に失敗しました。'); setIsInviteUsing(false); return }
   if (data.inviter_id !== session.user.id) {
-    await sb!.from('follows').upsert({ follower_id: session.user.id, following_id: data.inviter_id }, { onConflict: 'follower_id,following_id', ignoreDuplicates: true })
+    const { error: followErr } = await sb.from('follows').upsert({ follower_id: session.user.id, following_id: data.inviter_id }, { onConflict: 'follower_id,following_id', ignoreDuplicates: true })
+    if (followErr) {
+      console.error('invite follow upsert failed', followErr)
+      setInviteActionError('招待コードは使用しましたが、フォロー処理に失敗しました。')
+      setIsInviteUsing(false)
+      return
+    }
     setFollowingIds((prev) => new Set(prev).add(data.inviter_id))
   }
   setInviteCodeInput('')
-  localStorage.removeItem(PENDING_INVITE_KEY)
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.removeItem(PENDING_INVITE_KEY)
+    } catch (error) {
+      console.warn('Failed to clear pending invite code', error)
+    }
+  }
   setPendingInviteCode('')
   setInviteActionMessage('招待コードを利用しました。招待者をフォローしました。')
   setIsInviteUsing(false)
