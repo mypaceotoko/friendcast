@@ -585,3 +585,28 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
   min-height:50px;
   border-radius:12px;
 }
+
+.comment-submit-btn{
+  width:100%;
+  min-height:48px;
+  border-radius:12px;
+  border:0;
+  font-size:16px;
+  font-weight:700;
+}
+.comment-submit-btn.is-enabled{
+  background:linear-gradient(145deg,#6d43ec,#9747ff);
+  color:#fff;
+  box-shadow:0 10px 20px rgba(109,75,209,.28);
+  opacity:1;
+}
+.comment-submit-btn.is-disabled{
+  background:#cfcce2;
+  color:#fff;
+  box-shadow:none;
+  opacity:.85;
+}
+.theme-dark .comment-submit-btn.is-disabled{
+  background:#505477;
+  color:#dbe1ff;
+}
