@@ -72,6 +72,12 @@ create table if not exists public.comments (
   created_at timestamptz not null default now(),
   constraint comments_body_length check (char_length(body) between 1 and 140)
 );
+create table if not exists public.post_likes (
+  post_id uuid not null references public.posts(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (post_id, user_id)
+);
 
 create index if not exists idx_audio_assets_post_id on public.audio_assets(post_id);
 create index if not exists idx_audio_assets_owner_id on public.audio_assets(owner_id);
@@ -83,6 +89,7 @@ alter table public.follows enable row level security;
 alter table public.close_friends enable row level security;
 alter table public.post_recipients enable row level security;
 alter table public.comments enable row level security;
+alter table public.post_likes enable row level security;
 
 drop policy if exists "profiles_select_own" on public.profiles;
 drop policy if exists "profiles_select_authenticated" on public.profiles;
@@ -127,6 +134,9 @@ drop policy if exists "post_recipients_delete_owner" on public.post_recipients;
 drop policy if exists "comments_select_authenticated" on public.comments;
 drop policy if exists "comments_insert_own" on public.comments;
 drop policy if exists "comments_delete_own" on public.comments;
+drop policy if exists "post_likes_select_authenticated" on public.post_likes;
+drop policy if exists "post_likes_insert_own" on public.post_likes;
+drop policy if exists "post_likes_delete_own" on public.post_likes;
 create policy "close_friends_select_owner_or_friend" on public.close_friends for select to authenticated
 using (auth.uid() = owner_id or auth.uid() = friend_id);
 create policy "close_friends_insert_own" on public.close_friends for insert to authenticated
@@ -177,6 +187,18 @@ create policy "comments_delete_own" on public.comments
 for delete to authenticated
 using (auth.uid() = user_id);
 
+create policy "post_likes_select_authenticated" on public.post_likes
+for select to authenticated
+using (true);
+
+create policy "post_likes_insert_own" on public.post_likes
+for insert to authenticated
+with check (auth.uid() = user_id);
+
+create policy "post_likes_delete_own" on public.post_likes
+for delete to authenticated
+using (auth.uid() = user_id);
+
 grant select, insert, update, delete on public.profiles to authenticated;
 grant select, insert, update, delete on public.posts to authenticated;
 grant select, insert, update, delete on public.audio_assets to authenticated;
@@ -184,6 +206,7 @@ grant select, insert, delete on public.follows to authenticated;
 grant select, insert, delete on public.close_friends to authenticated;
 grant select, insert, delete on public.post_recipients to authenticated;
 grant select, insert, delete on public.comments to authenticated;
+grant select, insert, delete on public.post_likes to authenticated;
 
 -- Storage bucket/policies (run in Supabase SQL editor)
 insert into storage.buckets (id, name, public)
