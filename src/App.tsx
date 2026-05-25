@@ -1582,25 +1582,72 @@ const toggleVoiceCommentPlay = async (comment: CommentRow) => {
 }
 
 const handleCreateVoiceComment = async (postId: string) => {
-  if (!session?.user || voiceCommentPostingMap[postId]) return
+  if (voiceCommentPostingMap[postId]) return
+  const userId = session?.user?.id ?? ''
   const blob = voiceReplyBlobByPostId[postId]
-  if (!blob) return
+  const VOICE_BUCKET = 'voice-posts'
+
+  if (!userId) {
+    setCommentsErrorMap((prev) => ({ ...prev, [postId]: 'ログイン情報を確認できません。再度お試しください。' }))
+    return
+  }
+  if (!postId) {
+    setCommentsErrorMap((prev) => ({ ...prev, [postId]: '投稿IDが取得できないため送信できませんでした。' }))
+    return
+  }
+  if (!blob) {
+    setCommentsErrorMap((prev) => ({ ...prev, [postId]: '録音済みデータが見つかりません。録音してから送信してください。' }))
+    return
+  }
+  if (blob.size === 0) {
+    setCommentsErrorMap((prev) => ({ ...prev, [postId]: '録音データが空です。再録音してから送信してください。' }))
+    return
+  }
+  if (!sb) {
+    setCommentsErrorMap((prev) => ({ ...prev, [postId]: '接続情報の初期化に失敗しました。時間をおいて再試行してください。' }))
+    return
+  }
+  if (!VOICE_BUCKET) {
+    setCommentsErrorMap((prev) => ({ ...prev, [postId]: '保存先の設定が不正です。管理者にお問い合わせください。' }))
+    return
+  }
+
   setVoiceCommentPostingMap((prev) => ({ ...prev, [postId]: true }))
   setCommentsErrorMap((prev) => ({ ...prev, [postId]: '' }))
   try {
-    const ext = (blob.type.split('/')[1] || 'webm').replace('x-', '')
-    const storagePath = `comments/${postId}/${session.user.id}-${Date.now()}.${ext}`
+    const ext = (blob.type.split('/')[1] || 'webm').replace('x-', '') || 'webm'
+    const filePath = `${userId}/comments/${postId}/reply-${Date.now()}.${ext}`
     const contentType = blob.type || 'audio/webm'
-    const { error: uploadError } = await sb!.storage.from('voice-posts').upload(storagePath, blob, { contentType, upsert: false })
+
+    if (!filePath) {
+      setCommentsErrorMap((prev) => ({ ...prev, [postId]: '保存パスの生成に失敗しました。再度お試しください。' }))
+      return
+    }
+
+    const { error: uploadError } = await sb.storage.from(VOICE_BUCKET).upload(filePath, blob, { contentType, upsert: false })
     if (uploadError) {
-      console.error('voice reply upload failed', { uploadError, postId, userId: session.user.id, storagePath })
+      console.error('Voice reply upload failed', {
+        bucket: VOICE_BUCKET,
+        path: filePath,
+        blobType: blob.type,
+        blobSize: blob.size,
+        errorMessage: uploadError.message,
+        errorStatusCode: (uploadError as { statusCode?: string | number }).statusCode,
+        errorStatus: (uploadError as { status?: string | number }).status,
+        error: uploadError,
+      })
       setCommentsErrorMap((prev) => ({ ...prev, [postId]: '音声返信のアップロードに失敗しました。' }))
       return
     }
-    const { data: signedData, error: signedError } = await sb!.storage.from('voice-posts').createSignedUrl(storagePath, 60 * 60 * 24 * 30)
+    const { data: signedData, error: signedError } = await sb.storage.from(VOICE_BUCKET).createSignedUrl(filePath, 60 * 60 * 24 * 30)
     if (signedError || !signedData?.signedUrl) throw (signedError ?? new Error('signed url failed'))
+    if (!signedData.signedUrl) {
+      setCommentsErrorMap((prev) => ({ ...prev, [postId]: '音声返信URLの生成に失敗しました。再度お試しください。' }))
+      return
+    }
+
     const durationSeconds = Math.max(1, Math.round((voiceReplyDurationByPostId[postId] ?? 0) / 1000))
-    const { data, error } = await sb!.from('comments').insert({ post_id: postId, user_id: session.user.id, body: '', comment_type: 'voice', audio_url: signedData.signedUrl, audio_duration_seconds: durationSeconds }).select('id,post_id,user_id,body,created_at,comment_type,audio_url,audio_duration_seconds').single()
+    const { data, error } = await sb.from('comments').insert({ post_id: postId, user_id: userId, body: '', comment_type: 'voice', audio_url: signedData.signedUrl, audio_duration_seconds: durationSeconds }).select('id,post_id,user_id,body,created_at,comment_type,audio_url,audio_duration_seconds').single()
     if (error || !data) throw (error ?? new Error('voice comment insert failed'))
     const nextComment = { ...(data as CommentRow), comment_type: 'voice' as CommentType, body: typeof (data as CommentRow).body === 'string' ? (data as CommentRow).body : '' }
     setCommentsByPostId((prev) => ({ ...prev, [postId]: [...(prev[postId] ?? []), nextComment] }))
