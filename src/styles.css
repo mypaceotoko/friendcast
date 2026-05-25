@@ -856,7 +856,6 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
   margin-top:16px;
 }
 .screen-home .post-user-name,
-.screen-home .post-action-text,
 .screen-home .post-date,
 .screen-home .post-text,
 .screen-home .post-sub-text{
