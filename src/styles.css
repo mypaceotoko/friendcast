@@ -430,5 +430,56 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
   .tweet-header-actions-floating .visibility-badge{max-width:96px;font-size:10px;}
 }
 
+/* Timeline author meta spacing normalization */
+.tweet-card .tweet-header-row-fixed,
+.tweet-item .tweet-header-row-fixed{
+  margin-bottom: 2px;
+}
+
+.tweet-card .tweet-author-link,
+.tweet-item .tweet-author-link{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  justify-content:flex-start;
+  gap:2px;
+  min-height:0;
+  line-height:1.25;
+  padding-right:116px;
+}
+
+.tweet-card .author-primary,
+.tweet-item .author-primary{
+  min-width:0;
+  line-height:1.25;
+}
+
+.tweet-card .author-primary strong,
+.tweet-item .author-primary strong{
+  line-height:1.25;
+}
+
+.tweet-card .author-handle,
+.tweet-item .author-handle{
+  margin:0;
+  line-height:1.25;
+}
+
+.tweet-card .post-date,
+.tweet-item .post-date{
+  margin:1px 0 8px;
+  line-height:1.25;
+}
+
+.tweet-card .tweet-header-actions-floating,
+.tweet-item .tweet-header-actions-floating{
+  align-items:flex-start;
+}
+
+.tweet-card .tweet-header-actions-floating .visibility-badge,
+.tweet-item .tweet-header-actions-floating .visibility-badge{
+  margin-top:0;
+}
+
 .build-marker { position: fixed; left: 10px; bottom: calc(8px + env(safe-area-inset-bottom)); z-index: 200; font-size: 10px; letter-spacing: .02em; color: rgba(58, 59, 79, .72); background: rgba(255, 255, 255, .7); border: 1px solid rgba(106, 76, 199, .22); border-radius: 999px; padding: 3px 8px; pointer-events: none; }
 .theme-dark .build-marker { color: rgba(227, 233, 255, .75); background: rgba(14, 18, 31, .72); border-color: rgba(137, 146, 192, .35); }
