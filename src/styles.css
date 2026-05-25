@@ -676,6 +676,22 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
   position: relative;
   z-index: 6;
   pointer-events: auto;
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(237, 232, 255, .9), rgba(246, 242, 255, .95));
+  border: 1px solid rgba(172, 151, 236, .35);
+}
+.theme-dark .comments-panel{
+  background: linear-gradient(180deg, rgba(69, 58, 112, .55), rgba(54, 45, 93, .65));
+  border-color: rgba(161, 133, 244, .35);
+}
+.comments-panel .discover-user-item{
+  margin-top: 8px;
+  border-radius: 10px;
+}
+.comments-panel .discover-user-meta span{
+  word-break: break-word;
 }
 .comment-input-row{
   position: relative;
