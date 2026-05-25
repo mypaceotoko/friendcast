@@ -941,18 +941,18 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
 }
 .compose-close-button{
   position: fixed;
-  right: max(12px, calc((100vw - 480px) / 2 + 12px));
-  top: calc(max(8px, env(safe-area-inset-top)) + 4px);
-  width: 48px;
-  height: 48px;
+  right: max(16px, calc((100vw - 480px) / 2 + 18px));
+  bottom: calc(112px + env(safe-area-inset-bottom));
+  width: 56px;
+  height: 56px;
   border-radius: 999px;
   border: 1px solid rgba(234, 76, 120, .28);
   background: linear-gradient(165deg, #f07aa4, #e86492) !important;
   color: #fff !important;
-  font-size: 26px;
+  font-size: 32px;
   line-height: 1;
-  box-shadow: 0 6px 14px rgba(234,76,120,.20);
-  z-index: 130;
+  box-shadow: 0 10px 24px rgba(232,100,146,.30);
+  z-index: 76;
 }
 .theme-dark .compose-close-button{
   border-color: rgba(245, 143, 182, .35);
@@ -976,7 +976,10 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
 }
 @media (max-width: 430px){
   .compose-close-button{
-    right: max(10px, calc((100vw - 480px) / 2 + 10px));
-    top: calc(max(6px, env(safe-area-inset-top)) + 2px);
+    right: max(12px, calc((100vw - 480px) / 2 + 12px));
+    bottom: calc(136px + env(safe-area-inset-bottom));
+    width: 52px;
+    height: 52px;
+    font-size: 30px;
   }
 }
