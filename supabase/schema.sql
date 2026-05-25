@@ -58,6 +58,13 @@ create table if not exists public.close_friends (
   constraint close_friends_no_self check (owner_id <> friend_id)
 );
 
+create table if not exists public.post_recipients (
+  post_id uuid not null references public.posts(id) on delete cascade,
+  recipient_id uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (post_id, recipient_id)
+);
+
 create index if not exists idx_audio_assets_post_id on public.audio_assets(post_id);
 create index if not exists idx_audio_assets_owner_id on public.audio_assets(owner_id);
 
@@ -66,6 +73,7 @@ alter table public.posts enable row level security;
 alter table public.audio_assets enable row level security;
 alter table public.follows enable row level security;
 alter table public.close_friends enable row level security;
+alter table public.post_recipients enable row level security;
 
 drop policy if exists "profiles_select_own" on public.profiles;
 drop policy if exists "profiles_select_authenticated" on public.profiles;
@@ -104,6 +112,9 @@ create policy "follows_delete_own" on public.follows for delete to authenticated
 drop policy if exists "close_friends_select_owner_or_friend" on public.close_friends;
 drop policy if exists "close_friends_insert_own" on public.close_friends;
 drop policy if exists "close_friends_delete_own" on public.close_friends;
+drop policy if exists "post_recipients_select_related" on public.post_recipients;
+drop policy if exists "post_recipients_insert_owner" on public.post_recipients;
+drop policy if exists "post_recipients_delete_owner" on public.post_recipients;
 create policy "close_friends_select_owner_or_friend" on public.close_friends for select to authenticated
 using (auth.uid() = owner_id or auth.uid() = friend_id);
 create policy "close_friends_insert_own" on public.close_friends for insert to authenticated
@@ -111,11 +122,43 @@ with check (auth.uid() = owner_id);
 create policy "close_friends_delete_own" on public.close_friends for delete to authenticated
 using (auth.uid() = owner_id);
 
+create policy "post_recipients_select_related" on public.post_recipients
+for select to authenticated
+using (
+  recipient_id = auth.uid()
+  or exists (
+    select 1 from public.posts
+    where posts.id = post_recipients.post_id
+      and posts.user_id = auth.uid()
+  )
+);
+
+create policy "post_recipients_insert_owner" on public.post_recipients
+for insert to authenticated
+with check (
+  exists (
+    select 1 from public.posts
+    where posts.id = post_recipients.post_id
+      and posts.user_id = auth.uid()
+  )
+);
+
+create policy "post_recipients_delete_owner" on public.post_recipients
+for delete to authenticated
+using (
+  exists (
+    select 1 from public.posts
+    where posts.id = post_recipients.post_id
+      and posts.user_id = auth.uid()
+  )
+);
+
 grant select, insert, update, delete on public.profiles to authenticated;
 grant select, insert, update, delete on public.posts to authenticated;
 grant select, insert, update, delete on public.audio_assets to authenticated;
 grant select, insert, delete on public.follows to authenticated;
 grant select, insert, delete on public.close_friends to authenticated;
+grant select, insert, delete on public.post_recipients to authenticated;
 
 -- Storage bucket/policies (run in Supabase SQL editor)
 insert into storage.buckets (id, name, public)
