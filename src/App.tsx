@@ -9,7 +9,7 @@ type ProfileTab = 'posts' | 'audio' | 'replies' | 'likes'
 type PostKind = 'text' | 'audio' | 'text_audio'
 
 type Profile = { id: string; username: string; display_name: string | null; avatar_url: string | null; bio: string }
-type PostProfile = { username: string; display_name: string | null; avatar_url: string | null }
+type PostProfile = { username: string; display_name: string | null; avatar_url: string | null; bio: string }
 type CommentRow = { id: string; post_id: string; user_id: string; body: string; created_at: string }
 type CommentProfileMap = Record<string, PostProfile>
 type AudioAsset = { id: string; post_id: string; storage_bucket: string; storage_path: string; mime_type: string | null; duration_ms: number | null; size_bytes: number | null }
@@ -256,14 +256,14 @@ const loadPosts = async () => {
   setPosts(loadedPosts)
   const userIds = Array.from(new Set(loadedPosts.map((post) => post.user_id).filter(Boolean)))
   if (userIds.length === 0) { setProfileMap({}); setPostsStatus('loaded'); return }
-  const { data: profilesData, error: profilesError } = await sb!.from('profiles').select('id,username,display_name,avatar_url').in('id', userIds)
+  const { data: profilesData, error: profilesError } = await sb!.from('profiles').select('id,username,display_name,avatar_url,bio').in('id', userIds)
   if (profilesError) {
     setProfileMap({})
     setPostsStatus('error')
     setPostsError(toFriendlyError('fetch'))
     return
   }
-  setProfileMap((profilesData ?? []).reduce<ProfileMap>((acc, item) => { acc[item.id] = { username: item.username, display_name: item.display_name, avatar_url: item.avatar_url }; return acc }, {}))
+  setProfileMap((profilesData ?? []).reduce<ProfileMap>((acc, item) => { acc[item.id] = { username: item.username, display_name: item.display_name, avatar_url: item.avatar_url, bio: item.bio ?? '' }; return acc }, {}))
   setPostsStatus('loaded')
 }
 
@@ -376,7 +376,7 @@ const loadHomeRepostItems = async (viewerId: string, targetUserIds: string[]) =>
   setProfileMap((prev) => {
     const next = { ...prev }
     for (const item of repostProfiles.values()) {
-      next[item.id] = { username: item.username, display_name: item.display_name, avatar_url: item.avatar_url }
+      next[item.id] = { username: item.username, display_name: item.display_name, avatar_url: item.avatar_url, bio: item.bio ?? '' }
     }
     return next
   })
@@ -392,10 +392,10 @@ const loadCommentsForPost = async (postId: string) => {
     setCommentsByPostId((prev) => ({ ...prev, [postId]: comments }))
     const commenterIds = Array.from(new Set(comments.map((comment) => comment.user_id).filter(Boolean)))
     if (commenterIds.length > 0) {
-      const { data: profileData, error: profileError } = await sb!.from('profiles').select('id,username,display_name,avatar_url').in('id', commenterIds)
+      const { data: profileData, error: profileError } = await sb!.from('profiles').select('id,username,display_name,avatar_url,bio').in('id', commenterIds)
       if (profileError) throw profileError
       const loadedMap = (profileData ?? []).reduce<CommentProfileMap>((acc, item) => {
-        acc[item.id] = { username: item.username, display_name: item.display_name, avatar_url: item.avatar_url }
+        acc[item.id] = { username: item.username, display_name: item.display_name, avatar_url: item.avatar_url, bio: item.bio ?? '' }
         return acc
       }, {})
       setCommentProfileMap((prev) => ({ ...prev, ...loadedMap }))
@@ -458,7 +458,7 @@ const initializeUserData = async (activeSession: Session) => {
   ])
 }
 
-const ensureProfile = async (activeSession: Session | null) => { /* unchanged */
+const ensureProfile = async (activeSession: Session | null) => {
   if (!activeSession?.user) return setProfile(null)
   const id = activeSession.user.id
   const metadata = activeSession.user.user_metadata ?? {}
@@ -467,9 +467,20 @@ const ensureProfile = async (activeSession: Session | null) => { /* unchanged */
   const avatar = metadata.avatar_url ?? metadata.picture ?? null
   const username = `${emailLocalPart}_${id.replace(/-/g, '').slice(0, 6)}`
   const fallbackProfile: Profile = { id, username, display_name: displayName, avatar_url: avatar, bio: '' }
-  await sb!.from('profiles').upsert(fallbackProfile, { onConflict: 'id' })
-  const { data } = await sb!.from('profiles').select('id,username,display_name,avatar_url,bio').eq('id', id).single()
-  setProfile(data ?? fallbackProfile)
+  const { data: existingProfile, error: existingError } = await sb!.from('profiles').select('id,username,display_name,avatar_url,bio').eq('id', id).maybeSingle()
+  if (existingError) throw existingError
+  if (existingProfile) {
+    setProfile({ ...existingProfile, bio: existingProfile.bio ?? '' })
+    return
+  }
+  const { data: insertedProfile, error: insertError } = await sb!.from('profiles').insert({
+    id,
+    username,
+    display_name: displayName,
+    avatar_url: avatar
+  }).select('id,username,display_name,avatar_url,bio').single()
+  if (insertError) throw insertError
+  setProfile(insertedProfile ? { ...insertedProfile, bio: insertedProfile.bio ?? '' } : fallbackProfile)
 }
 
 useEffect(() => () => { stopRecorder(); if (recordedUrl) URL.revokeObjectURL(recordedUrl) }, [recordedUrl])
@@ -483,7 +494,7 @@ useEffect(() => {
   let mounted = true
   void sb!.from('profiles').select('id,username,display_name,avatar_url,bio').eq('id', targetId).single().then(({ data }) => {
     if (!mounted || !data) return
-    setProfileMap((prev) => ({ ...prev, [data.id]: { username: data.username, display_name: data.display_name, avatar_url: data.avatar_url } }))
+    setProfileMap((prev) => ({ ...prev, [data.id]: { username: data.username, display_name: data.display_name, avatar_url: data.avatar_url, bio: data.bio ?? '' } }))
   })
   return () => { mounted = false }
 }, [viewingProfileId, profile?.id])
@@ -531,7 +542,7 @@ useEffect(() => {
 }, [])
 
 const activeProfileId = viewingProfileId ?? session?.user.id ?? null
-const viewedProfile = activeProfileId ? (activeProfileId === profile?.id ? profile : (profileMap[activeProfileId] ? { id: activeProfileId, ...profileMap[activeProfileId], bio: '' } : null)) : null
+const viewedProfile = activeProfileId ? (activeProfileId === profile?.id ? profile : (profileMap[activeProfileId] ? { id: activeProfileId, ...profileMap[activeProfileId], bio: profileMap[activeProfileId].bio ?? '' } : null)) : null
 const isOwnProfile = !!session?.user?.id && activeProfileId === session.user.id
 const profileEditAvatarPreview = profileEditForm.avatar_url.trim() || viewedProfile?.avatar_url || ''
 
@@ -583,7 +594,7 @@ const saveProfileEdit = async () => {
   setIsSavingProfile(true)
   setProfileEditMessage('')
   const updatePayload = { ...normalizedForm, avatar_url: normalizedForm.avatar_url || null, updated_at: new Date().toISOString() }
-  const { data, error } = await sb.from('profiles').update(updatePayload).eq('id', session.user.id).select('id,username,display_name,avatar_url,bio').single()
+  const { data, error } = await sb.from('profiles').update(updatePayload).eq('id', session.user.id).select('id,username,display_name,avatar_url,bio,updated_at').single()
   setIsSavingProfile(false)
   if (error) {
     const duplicate = `${error.message ?? ''} ${error.details ?? ''}`.toLowerCase().includes('duplicate') || `${error.message ?? ''}`.toLowerCase().includes('unique')
@@ -593,8 +604,8 @@ const saveProfileEdit = async () => {
   }
   if (!data) return
   setProfile((prev) => prev ? { ...prev, ...data, bio: data.bio ?? '' } : prev)
-  setProfileMap((prev) => ({ ...prev, [session.user.id]: { username: data.username, display_name: data.display_name, avatar_url: data.avatar_url } }))
-  setCommentProfileMap((prev) => ({ ...prev, [session.user.id]: { username: data.username, display_name: data.display_name, avatar_url: data.avatar_url } }))
+  setProfileMap((prev) => ({ ...prev, [session.user.id]: { username: data.username, display_name: data.display_name, avatar_url: data.avatar_url, bio: data.bio ?? '' } }))
+  setCommentProfileMap((prev) => ({ ...prev, [session.user.id]: { username: data.username, display_name: data.display_name, avatar_url: data.avatar_url, bio: data.bio ?? '' } }))
   setDiscoverUsers((prev) => prev.map((item) => item.id === session.user.id ? { ...item, ...data, bio: data.bio ?? item.bio } : item))
   setIsEditingProfile(false)
   setProfileEditMessage('プロフィールを更新しました。')
