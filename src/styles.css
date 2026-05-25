@@ -128,13 +128,14 @@ button { cursor: pointer; }
 .theme-light .compose-screen .confirm-line { color: #445a89; }
 .theme-dark .compose-screen .confirm-line { color: #9fb6ff; }
 
-.home-mobile-header { --home-header-side-size: 42px; --home-brand-optical-shift: 8px; position: sticky; top: 0; z-index: 50; display:flex; align-items:center; justify-content:space-between; padding: 10px 16px; min-height: 64px; background: rgba(249,249,255,.88); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(122,117,131,.2); }
+.home-mobile-header { --home-header-side-size: 40px; --home-brand-optical-shift: 7px; position: sticky; top: 0; z-index: 50; display:flex; align-items:center; justify-content:space-between; padding: 10px 16px; min-height: 64px; background: rgba(249,249,255,.88); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(122,117,131,.2); }
 .home-side-slot { width: var(--home-header-side-size); height: var(--home-header-side-size); display:flex; align-items:center; justify-content:center; position: relative; z-index: 1; }
 .home-brand-slot { position: absolute; left: 50%; transform: translateX(calc(-50% + var(--home-brand-optical-shift))); min-width: 0; width: min(300px, calc(100% - (var(--home-header-side-size) * 2) - 56px)); display:flex; justify-content: center; align-items: center; pointer-events: none; }
 .home-brand-logo { width: clamp(160px, 46vw, 300px); max-width: 100%; height: auto; display: block; margin: 0 auto; }
 .friendcast-logo-text { font-family: Georgia, "Times New Roman", serif; font-size: 118px; font-weight: 800; letter-spacing: .015em; paint-order: stroke; stroke: rgba(63, 37, 122, .22); stroke-width: 2.2px; filter: drop-shadow(0 1px 0 rgba(255,255,255,.32)) drop-shadow(0 2px 6px rgba(88,58,156,.18)); }
-.mini-avatar { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg,#e0bba8,#b8c9ff); border: 2px solid #efe7de; padding: 0; font-size: 15px; }
-.header-spacer { width: 42px; height: 42px; flex-shrink: 0; }
+.mini-avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg,#e0bba8,#b8c9ff); border: 2px solid #efe7de; padding: 0; font-size: 15px; }
+.header-spacer { width: 40px; height: 40px; flex-shrink: 0; }
+@media (max-width: 430px) { .home-mobile-header { --home-header-side-size: 39px; --home-brand-optical-shift: 6px; } .mini-avatar, .header-spacer { width: 39px; height: 39px; } }
 .screen-home { background: #f9f9ff; border-radius: 0; border: 0; padding: 0 0 calc(108px + env(safe-area-inset-bottom)); }
 .home-context-copy { position: sticky; top: 64px; z-index: 40; background: rgba(249,249,255,.94); border-bottom: 1px solid rgba(122,117,131,.18); padding: 11px 20px 10px; }
 .home-context-copy p { margin: 0; font-size: 13px; line-height: 1.4; color: #4a5b84; font-weight: 600; }
