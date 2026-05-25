@@ -29,7 +29,7 @@ const ShareIcon = () => <svg className="share-icon" viewBox="0 0 24 24" aria-hid
 const MAX_COMPOSE_LENGTH = 140
 const AVATAR_BUCKET = 'avatars'
 const MAX_AVATAR_FILE_SIZE_BYTES = 5 * 1024 * 1024
-const MAX_RECORDING_SECONDS = 300
+const MAX_RECORDING_SECONDS = 600
 const MAX_RECORDING_MS = MAX_RECORDING_SECONDS * 1000
 
 const formatDuration = (ms: number | null | undefined) => {
@@ -155,6 +155,7 @@ const mediaStreamRef = useRef<MediaStream | null>(null)
 const chunksRef = useRef<BlobPart[]>([])
 const recordingTimerRef = useRef<number | null>(null)
 const recordingStartAtRef = useRef<number | null>(null)
+const isStoppingRecorderRef = useRef(false)
 const previewAudioRef = useRef<HTMLAudioElement | null>(null)
 const playAudioRef = useRef<HTMLAudioElement | null>(null)
 const composeTextareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -200,9 +201,11 @@ const withTimeout = async <T,>(promiseLike: PromiseLike<T>, timeoutMs = 15000): 
 }
 
 const stopRecorder = () => {
+  if (isStoppingRecorderRef.current) return
+  isStoppingRecorderRef.current = true
   if (recordingTimerRef.current) window.clearInterval(recordingTimerRef.current)
   recordingTimerRef.current = null
-  mediaRecorderRef.current?.stop()
+  if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop()
   mediaStreamRef.current?.getTracks().forEach((t) => t.stop())
   mediaStreamRef.current = null
   setIsRecording(false)
@@ -226,6 +229,7 @@ const startRecording = async () => {
     mediaRecorderRef.current = recorder
     recorder.ondataavailable = (event) => { if (event.data.size > 0) chunksRef.current.push(event.data) }
     recorder.onstop = () => {
+      isStoppingRecorderRef.current = false
       const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' })
       const url = URL.createObjectURL(blob)
       setRecordedBlob(blob)
@@ -236,6 +240,7 @@ const startRecording = async () => {
       setRecordedDurationMs(measuredDuration)
     }
     recorder.start()
+    isStoppingRecorderRef.current = false
     setIsRecording(true)
     recordingTimerRef.current = window.setInterval(() => {
       setRecordingSeconds((prev) => {
