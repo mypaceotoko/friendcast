@@ -99,6 +99,7 @@ const recordingStartAtRef = useRef<number | null>(null)
 const previewAudioRef = useRef<HTMLAudioElement | null>(null)
 const playAudioRef = useRef<HTMLAudioElement | null>(null)
 const composeTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+const lastProfileScrollKeyRef = useRef<string>('')
 
 const resolvedTheme = theme === 'system' ? (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme
 const isRecordSupported = typeof window !== 'undefined' && !!window.MediaRecorder && !!navigator.mediaDevices?.getUserMedia
@@ -523,7 +524,11 @@ const renderAudioPlayer = (post: Post) => {
 }
 
 const getAvatarInitial = (name: string) => name.slice(0, 1).toUpperCase()
-const goToProfile = (userId: string) => { setViewingProfileId(userId); goToScreen('profile') }
+const goToProfile = (userId: string) => {
+  setViewingProfileId(userId)
+  setScreen('profile')
+  window.requestAnimationFrame(() => safeScrollToTop())
+}
 const goToScreen = (nextScreen: Screen) => {
   if (nextScreen === 'compose') safeScrollToTop()
   setScreen(nextScreen)
@@ -542,6 +547,20 @@ const handleComposeTextChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
 useEffect(() => {
   if (screen === 'compose') safeScrollToTop()
 }, [screen])
+
+
+useEffect(() => {
+  if (screen !== 'profile') {
+    lastProfileScrollKeyRef.current = ''
+    return
+  }
+  const targetProfileId = viewingProfileId ?? session?.user.id ?? null
+  if (!targetProfileId) return
+  const nextKey = `${screen}:${targetProfileId}`
+  if (lastProfileScrollKeyRef.current === nextKey) return
+  lastProfileScrollKeyRef.current = nextKey
+  window.setTimeout(() => safeScrollToTop(), 0)
+}, [screen, viewingProfileId, session?.user.id])
 
 useEffect(() => {
   if (screen === 'compose') adjustComposeTextareaHeight()
