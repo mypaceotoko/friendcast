@@ -10,6 +10,8 @@ type PostKind = 'text' | 'audio' | 'text_audio'
 
 type Profile = { id: string; username: string; display_name: string | null; avatar_url: string | null; bio: string }
 type PostProfile = { username: string; display_name: string | null; avatar_url: string | null }
+type CommentRow = { id: string; post_id: string; user_id: string; body: string; created_at: string }
+type CommentProfileMap = Record<string, PostProfile>
 type AudioAsset = { id: string; post_id: string; storage_bucket: string; storage_path: string; mime_type: string | null; duration_ms: number | null; size_bytes: number | null }
 type SupabasePostRow = { id: string; text: string; visibility: Visibility; created_at: string; user_id: string; kind: PostKind | null; audio_assets?: AudioAsset[] }
 type Post = SupabasePostRow & { audioAsset: AudioAsset | null }
@@ -58,7 +60,6 @@ const [session, setSession] = useState<Session | null>(null)
 const [profile, setProfile] = useState<Profile | null>(null)
 const [posts, setPosts] = useState<Post[]>([])
 const [profileMap, setProfileMap] = useState<ProfileMap>({})
-const [_selectedPostId, setSelectedPostId] = useState<string | null>(null)
 const [errorMessage, setErrorMessage] = useState('')
 const [postingStatusMessage, setPostingStatusMessage] = useState('')
 const [deletingPostId, setDeletingPostId] = useState<string | null>(null)
@@ -94,6 +95,15 @@ const [followActionError, setFollowActionError] = useState('')
 const [discoverUsers, setDiscoverUsers] = useState<Profile[]>([])
 const [discoverStatus, setDiscoverStatus] = useState<DiscoverStatus>('idle')
 const [discoverError, setDiscoverError] = useState('')
+const [commentsCountMap, setCommentsCountMap] = useState<Record<string, number>>({})
+const [openedCommentsPostId, setOpenedCommentsPostId] = useState<string | null>(null)
+const [commentsByPostId, setCommentsByPostId] = useState<Record<string, CommentRow[]>>({})
+const [commentProfileMap, setCommentProfileMap] = useState<CommentProfileMap>({})
+const [commentsLoadingMap, setCommentsLoadingMap] = useState<Record<string, boolean>>({})
+const [commentsErrorMap, setCommentsErrorMap] = useState<Record<string, string>>({})
+const [commentInputMap, setCommentInputMap] = useState<Record<string, string>>({})
+const [commentPostingMap, setCommentPostingMap] = useState<Record<string, boolean>>({})
+const [commentDeletingMap, setCommentDeletingMap] = useState<Record<string, boolean>>({})
 const isRestoringSessionRef = useRef(true)
 const INIT_TIMEOUT_MS = 8000
 const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -112,7 +122,7 @@ const sb = supabase
 
 
 
-const toFriendlyError = (scope: 'permission' | 'storage_upload' | 'signed_url' | 'mic' | 'record_unsupported' | 'post_save' | 'audio_save' | 'delete' | 'fetch') => ({
+const toFriendlyError = (scope: 'permission' | 'storage_upload' | 'signed_url' | 'mic' | 'record_unsupported' | 'post_save' | 'audio_save' | 'delete' | 'fetch' | 'comment_fetch' | 'comment_post' | 'comment_delete') => ({
   permission: '投稿の保存権限でエラーが発生しました。もう一度お試しください。',
   storage_upload: '音声のアップロードに失敗しました。通信状況を確認してください。',
   signed_url: '音声の再生準備に失敗しました。もう一度タップしてください。',
@@ -121,7 +131,10 @@ const toFriendlyError = (scope: 'permission' | 'storage_upload' | 'signed_url' |
   post_save: '投稿の保存に失敗しました。しばらくしてから再試行してください。',
   audio_save: '音声情報の保存に失敗しました。もう一度投稿してください。',
   delete: '投稿の削除に失敗しました。もう一度お試しください。',
-  fetch: '投稿の取得に失敗しました。時間をおいて再読み込みしてください。'
+  fetch: '投稿の取得に失敗しました。時間をおいて再読み込みしてください。',
+  comment_fetch: 'コメントの取得に失敗しました。時間をおいて再試行してください。',
+  comment_post: 'コメントの投稿に失敗しました。もう一度お試しください。',
+  comment_delete: 'コメントの削除に失敗しました。もう一度お試しください。'
 }[scope])
 
 const toFollowError = () => 'フォロー操作に失敗しました。時間をおいて再試行してください。'
@@ -246,6 +259,46 @@ const loadFollowing = async (userId: string) => {
     return
   }
   setFollowingIds(new Set((data ?? []).map((row) => row.following_id).filter(Boolean)))
+}
+
+const loadCommentsCount = async (postIds: string[]) => {
+  if (!postIds.length) return
+  const { data, error } = await sb!.from('comments').select('post_id').in('post_id', postIds)
+  if (error) {
+    console.error('comment count fetch failed', error)
+    return
+  }
+  const nextMap = postIds.reduce<Record<string, number>>((acc, postId) => { acc[postId] = 0; return acc }, {})
+  for (const item of data ?? []) {
+    if (item.post_id) nextMap[item.post_id] = (nextMap[item.post_id] ?? 0) + 1
+  }
+  setCommentsCountMap((prev) => ({ ...prev, ...nextMap }))
+}
+
+const loadCommentsForPost = async (postId: string) => {
+  setCommentsLoadingMap((prev) => ({ ...prev, [postId]: true }))
+  setCommentsErrorMap((prev) => ({ ...prev, [postId]: '' }))
+  try {
+    const { data, error } = await sb!.from('comments').select('id,post_id,user_id,body,created_at').eq('post_id', postId).order('created_at', { ascending: true })
+    if (error) throw error
+    const comments = (data ?? []) as CommentRow[]
+    setCommentsByPostId((prev) => ({ ...prev, [postId]: comments }))
+    const commenterIds = Array.from(new Set(comments.map((comment) => comment.user_id).filter(Boolean)))
+    if (commenterIds.length > 0) {
+      const { data: profileData, error: profileError } = await sb!.from('profiles').select('id,username,display_name,avatar_url').in('id', commenterIds)
+      if (profileError) throw profileError
+      const loadedMap = (profileData ?? []).reduce<CommentProfileMap>((acc, item) => {
+        acc[item.id] = { username: item.username, display_name: item.display_name, avatar_url: item.avatar_url }
+        return acc
+      }, {})
+      setCommentProfileMap((prev) => ({ ...prev, ...loadedMap }))
+    }
+  } catch (error) {
+    console.error('comment load failed', error)
+    setCommentsErrorMap((prev) => ({ ...prev, [postId]: toFriendlyError('comment_fetch') }))
+  } finally {
+    setCommentsLoadingMap((prev) => ({ ...prev, [postId]: false }))
+  }
 }
 
 const loadCloseFriends = async (userId: string) => {
@@ -631,6 +684,16 @@ useEffect(() => {
   if (screen === 'compose') adjustComposeTextareaHeight()
 }, [screen, composeText])
 
+useEffect(() => {
+  const postIds = posts.map((post) => post.id)
+  if (postIds.length === 0) {
+    setCommentsCountMap({})
+    setOpenedCommentsPostId(null)
+    return
+  }
+  void loadCommentsCount(postIds)
+}, [posts])
+
 if (!isSupabaseConfigured || !supabase) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p className="status-message status-error">設定エラー: Supabaseの環境変数が不足しています。</p><p>VITE_SUPABASE_URL と VITE_SUPABASE_ANON_KEY を Vercel Preview に設定してください。</p></article></main></div>
 if (initialAuthLoading) return <div className={`app-shell theme-${resolvedTheme}`}><div className="login-card"><h1>friendcast</h1><p>ログイン状態を確認中です...（最大8秒）</p></div></div>
 if (!session) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p>親しい人にだけ届ける、声のタイムライン</p>{sessionRestoreError && <p className="status-message status-error">{sessionRestoreError}</p>}<button className="google-login-btn" onClick={async () => { const redirectTo = getAuthRedirectUrl(); await supabase?.auth.signInWithOAuth({ provider: 'google', options: redirectTo ? { redirectTo } : undefined }) }}>Googleでログイン</button></article></main></div>
@@ -651,6 +714,12 @@ const handleDeletePost = async (post: Post) => {
     }
     const { error: postDeleteError } = await sb!.from('posts').delete().eq('id', post.id).eq('user_id', session.user.id)
     if (postDeleteError) throw postDeleteError
+    setCommentsCountMap((prev) => {
+      const next = { ...prev }
+      delete next[post.id]
+      return next
+    })
+    if (openedCommentsPostId === post.id) setOpenedCommentsPostId(null)
     await loadPosts()
   } catch (error) {
     console.error('post delete failed', error)
@@ -716,7 +785,53 @@ const toggleCloseFriend = async (targetUserId: string) => {
   }
 }
 
-const renderTimelinePost = (post: Post, options?: { compact?: boolean; showFollowButton?: boolean }) => { const compact = options?.compact ?? false; const showFollowButton = options?.showFollowButton ?? false; const authorProfile = resolvePostAuthor(post); const isOwnPost = post.user_id === session?.user.id; const displayName = authorProfile?.display_name ?? authorProfile?.username ?? 'friendcast user'; const handle = authorProfile?.username ? `@${authorProfile.username}` : '@user'; return <article key={post.id} className="tweet-item" role="article"><button className="tweet-avatar" onClick={() => goToProfile(post.user_id)} style={authorProfile?.avatar_url ? { backgroundImage: `url(${authorProfile.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}>{displayName.slice(0, 1)}</button><div className="tweet-content"><div className="tweet-header-row tweet-header-row-fixed"><button className="tweet-header author-link tweet-author-link" onClick={() => goToProfile(post.user_id)} type="button"><div className="author-primary"><strong>{displayName}</strong></div><span className="author-handle">{handle}</span></button><div className="tweet-header-actions tweet-header-actions-floating">{showFollowButton && !isOwnPost && <button className={`follow-btn ${isFollowing(post.user_id) ? 'is-following' : ''}`} disabled={isFollowPending(post.user_id)} onClick={() => void toggleFollow(post.user_id)} type="button">{isFollowPending(post.user_id) ? '処理中...' : (isFollowing(post.user_id) ? 'フォロー中' : 'フォロー')}</button>}<div className="visibility-badge"><span>{visibilityBadgeIcon[post.visibility]}</span><span>{visibilityComposeLabel[post.visibility]}</span></div>{isOwnPost && <button className="post-delete-btn" aria-label="投稿を削除" disabled={deletingPostId === post.id} onClick={() => void handleDeletePost(post)}>{deletingPostId === post.id ? '…' : '🗑'}</button>}</div></div><p className="post-date">{formatDate(post.created_at)}</p><p className="tweet-text">{post.text}</p>{renderAudioPlayer(post)}{postActionError[post.id] && <p className="inline-error">{postActionError[post.id]}</p>}{!compact && <div className="delivery-inline"><small>{audienceLabel[post.visibility]}に届きます</small></div>}<div className="action-row"><button className="icon-btn" onClick={() => { setSelectedPostId(post.id); setScreen('detail') }}>💬 <span>0</span></button><button className="icon-btn">🔁 <span>0</span></button><button className={`icon-btn ${likedPostIds.includes(post.id) ? 'active-icon' : ''}`} onClick={() => setLikedPostIds((prev) => prev.includes(post.id) ? prev.filter((id) => id !== post.id) : [...prev, post.id])}>♡ <span>{likedPostIds.includes(post.id) ? 1 : 0}</span></button><button className={`icon-btn ${savedPostIds.includes(post.id) ? 'active-icon' : ''}`} onClick={() => setSavedPostIds((prev) => prev.includes(post.id) ? prev.filter((id) => id !== post.id) : [...prev, post.id])}><ShareIcon /></button></div></div></article> }
+const toggleCommentsPanel = async (postId: string) => {
+  if (openedCommentsPostId === postId) return setOpenedCommentsPostId(null)
+  setOpenedCommentsPostId(postId)
+  await loadCommentsForPost(postId)
+}
+
+const handleCreateComment = async (postId: string) => {
+  if (!session?.user || commentPostingMap[postId]) return
+  const raw = commentInputMap[postId] ?? ''
+  const body = raw.trim()
+  if (!body || body.length > 140) return
+  setCommentPostingMap((prev) => ({ ...prev, [postId]: true }))
+  setCommentsErrorMap((prev) => ({ ...prev, [postId]: '' }))
+  try {
+    const { data, error } = await sb!.from('comments').insert({ post_id: postId, user_id: session.user.id, body }).select('id,post_id,user_id,body,created_at').single()
+    if (error || !data) throw (error ?? new Error('insert failed'))
+    const nextComment = data as CommentRow
+    setCommentsByPostId((prev) => ({ ...prev, [postId]: [...(prev[postId] ?? []), nextComment] }))
+    setCommentInputMap((prev) => ({ ...prev, [postId]: '' }))
+    setCommentsCountMap((prev) => ({ ...prev, [postId]: (prev[postId] ?? 0) + 1 }))
+  } catch (error) {
+    console.error('comment post failed', error)
+    setCommentsErrorMap((prev) => ({ ...prev, [postId]: toFriendlyError('comment_post') }))
+  } finally {
+    setCommentPostingMap((prev) => ({ ...prev, [postId]: false }))
+  }
+}
+
+const handleDeleteComment = async (postId: string, comment: CommentRow) => {
+  if (!session?.user || comment.user_id !== session.user.id || commentDeletingMap[comment.id]) return
+  const confirmed = window.confirm('このコメントを削除しますか？')
+  if (!confirmed) return
+  setCommentDeletingMap((prev) => ({ ...prev, [comment.id]: true }))
+  try {
+    const { error } = await sb!.from('comments').delete().eq('id', comment.id).eq('user_id', session.user.id)
+    if (error) throw error
+    setCommentsByPostId((prev) => ({ ...prev, [postId]: (prev[postId] ?? []).filter((item) => item.id !== comment.id) }))
+    setCommentsCountMap((prev) => ({ ...prev, [postId]: Math.max(0, (prev[postId] ?? 0) - 1) }))
+  } catch (error) {
+    console.error('comment delete failed', error)
+    setCommentsErrorMap((prev) => ({ ...prev, [postId]: toFriendlyError('comment_delete') }))
+  } finally {
+    setCommentDeletingMap((prev) => ({ ...prev, [comment.id]: false }))
+  }
+}
+
+const renderTimelinePost = (post: Post, options?: { compact?: boolean; showFollowButton?: boolean }) => { const compact = options?.compact ?? false; const showFollowButton = options?.showFollowButton ?? false; const authorProfile = resolvePostAuthor(post); const isOwnPost = post.user_id === session?.user.id; const displayName = authorProfile?.display_name ?? authorProfile?.username ?? 'friendcast user'; const handle = authorProfile?.username ? `@${authorProfile.username}` : '@user'; const isCommentsOpen = openedCommentsPostId === post.id; const comments = commentsByPostId[post.id] ?? []; const commentInput = commentInputMap[post.id] ?? ''; return <article key={post.id} className="tweet-item" role="article"><button className="tweet-avatar" onClick={() => goToProfile(post.user_id)} style={authorProfile?.avatar_url ? { backgroundImage: `url(${authorProfile.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}>{displayName.slice(0, 1)}</button><div className="tweet-content"><div className="tweet-header-row tweet-header-row-fixed"><button className="tweet-header author-link tweet-author-link" onClick={() => goToProfile(post.user_id)} type="button"><div className="author-primary"><strong>{displayName}</strong></div><span className="author-handle">{handle}</span></button><div className="tweet-header-actions tweet-header-actions-floating">{showFollowButton && !isOwnPost && <button className={`follow-btn ${isFollowing(post.user_id) ? 'is-following' : ''}`} disabled={isFollowPending(post.user_id)} onClick={() => void toggleFollow(post.user_id)} type="button">{isFollowPending(post.user_id) ? '処理中...' : (isFollowing(post.user_id) ? 'フォロー中' : 'フォロー')}</button>}<div className="visibility-badge"><span>{visibilityBadgeIcon[post.visibility]}</span><span>{visibilityComposeLabel[post.visibility]}</span></div>{isOwnPost && <button className="post-delete-btn" aria-label="投稿を削除" disabled={deletingPostId === post.id} onClick={() => void handleDeletePost(post)}>{deletingPostId === post.id ? '…' : '🗑'}</button>}</div></div><p className="post-date">{formatDate(post.created_at)}</p><p className="tweet-text">{post.text}</p>{renderAudioPlayer(post)}{postActionError[post.id] && <p className="inline-error">{postActionError[post.id]}</p>}{!compact && <div className="delivery-inline"><small>{audienceLabel[post.visibility]}に届きます</small></div>}<div className="action-row"><button className="icon-btn" onClick={() => void toggleCommentsPanel(post.id)}>💬 <span>{commentsCountMap[post.id] ?? 0}</span></button><button className="icon-btn">🔁 <span>0</span></button><button className={`icon-btn ${likedPostIds.includes(post.id) ? 'active-icon' : ''}`} onClick={() => setLikedPostIds((prev) => prev.includes(post.id) ? prev.filter((id) => id !== post.id) : [...prev, post.id])}>♡ <span>{likedPostIds.includes(post.id) ? 1 : 0}</span></button><button className={`icon-btn ${savedPostIds.includes(post.id) ? 'active-icon' : ''}`} onClick={() => setSavedPostIds((prev) => prev.includes(post.id) ? prev.filter((id) => id !== post.id) : [...prev, post.id])}><ShareIcon /></button></div>{isCommentsOpen && <section className="comments-panel"><div className="comment-input-row"><textarea maxLength={140} value={commentInput} onChange={(event) => setCommentInputMap((prev) => ({ ...prev, [post.id]: event.target.value }))} placeholder="コメントを書く..." className="compose-textarea" rows={2} /><div className="compose-sticky-action"><p className="compose-counter">{commentInput.length} / 140</p><button className="compose-post-btn" type="button" disabled={!commentInput.trim() || commentInput.trim().length > 140 || commentPostingMap[post.id]} onClick={() => void handleCreateComment(post.id)}>{commentPostingMap[post.id] ? '送信中...' : '送信'}</button></div></div>{commentsErrorMap[post.id] && <p className="inline-error">{commentsErrorMap[post.id]}</p>}{commentsLoadingMap[post.id] && <p className="status-message">コメントを読み込み中...</p>}{!commentsLoadingMap[post.id] && comments.length === 0 && <p className="status-message">まだコメントはありません</p>}{!commentsLoadingMap[post.id] && comments.length > 0 && <div>{comments.map((comment) => { const cProfile = commentProfileMap[comment.user_id]; const cName = cProfile?.display_name ?? cProfile?.username ?? 'friendcast user'; const cHandle = cProfile?.username ? `@${cProfile.username}` : '@user'; const isOwnComment = comment.user_id === session?.user.id; return <article key={comment.id} className="discover-user-item"><span className="discover-user-main"><span className="discover-avatar" style={cProfile?.avatar_url ? { backgroundImage: `url(${cProfile.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}>{getAvatarInitial(cName)}</span><span className="discover-user-meta"><strong>{cName}</strong><small>{cHandle} ・ {formatDate(comment.created_at)}</small><span>{comment.body}</span></span></span>{isOwnComment && <button type="button" className="post-delete-btn" disabled={commentDeletingMap[comment.id]} onClick={() => void handleDeleteComment(post.id, comment)}>{commentDeletingMap[comment.id] ? '…' : '削除'}</button>}</article> })}</div>}</section>}</div></article> }
 
 return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen">{screen === 'home' && <section className="screen-home"><header className="home-mobile-header"><button className="mini-avatar" onClick={() => { setViewingProfileId(session.user.id); goToScreen('profile') }} style={profile?.avatar_url ? { backgroundImage: `url(${profile.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}>{getAvatarInitial(profileName)}</button><h1>friendcast</h1><span className="header-spacer" /></header>{postsStatus === 'error' && <p className="status-message status-error">{postsError}</p>}{postsStatus === 'loading' && <p className="status-message">投稿を読み込み中です...</p>}{followActionError && <p className="status-message status-error">{followActionError}</p>}{homePosts.length === 0 && postsStatus !== 'loading' && <p className="status-message">投稿はまだありません</p>}{homePosts.length > 0 && !hasFollowingPosts && <div className="discover-guide"><p>フォロー中のユーザーの投稿はまだありません。検索から友達をフォローしてみましょう。</p><button type="button" onClick={() => goToScreen('search')}>ユーザーを探す</button></div>}<div className="timeline-list">{homePosts.map((post) => renderTimelinePost(post))}</div></section>}{screen === 'profile' && <section className="profile-screen"><div className="profile-block"><div className="profile-top-row"><div className="profile-photo" style={viewedProfile?.avatar_url ? { backgroundImage: `url(${viewedProfile.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}>{getAvatarInitial(viewedProfile?.display_name ?? viewedProfile?.username ?? 'U')}</div>{activeProfileId === session.user.id ? <button className="profile-edit-btn">プロフィールを編集</button> : <button className={`profile-edit-btn ${activeProfileId && isFollowing(activeProfileId) ? 'is-following' : ''}`} disabled={!activeProfileId || isFollowPending(activeProfileId)} onClick={() => activeProfileId && void toggleFollow(activeProfileId)}>{activeProfileId && isFollowPending(activeProfileId) ? '処理中...' : (activeProfileId && isFollowing(activeProfileId) ? 'フォロー中' : 'フォロー')}</button>}</div><h3 className="profile-name">{viewedProfile?.display_name ?? 'friendcast user'}</h3><p className="profile-id">{viewedProfile?.username ? `@${viewedProfile.username}` : '@user'}</p><p className="profile-bio">{viewedProfile?.bio || '自己紹介はまだありません。'}</p></div><div className="tabs profile-tabs"><button className={profileTab === 'posts' ? 'active-tab' : ''} onClick={() => setProfileTab('posts')}>投稿</button><button className={profileTab === 'audio' ? 'active-tab' : ''} onClick={() => setProfileTab('audio')}>ボイス</button></div><div className="timeline-list">{profilePostsToRender.map((post) => renderTimelinePost(post, { compact: true, showFollowButton: false }))}</div></section>}{screen === 'search' && <section className="search-screen"><article className="search-panel"><h2>検索</h2><h3>ユーザーを見つける</h3>{discoverError && <p className="status-message status-error search-status">{discoverError}</p>}{followActionError && <p className="status-message status-error search-status">{followActionError}</p>}{discoverStatus === 'loading' && <p className="status-message search-status">ユーザーを読み込み中です...</p>}{discoverStatus === 'loaded' && discoverUsers.length === 0 && <p className="status-message search-status">まだ他のユーザーがいません</p>}<div className="discover-list">{discoverUsers.map((user) => { const name = user.display_name ?? user.username; return <article className="discover-user-item" key={user.id}><button type="button" className="discover-user-main" onClick={() => goToProfile(user.id)}><span className="discover-avatar" style={user.avatar_url ? { backgroundImage: `url(${user.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}>{getAvatarInitial(name)}</span><span className="discover-user-meta"><strong>{name}</strong><small>@{user.username}</small></span></button><button className={`follow-btn ${isFollowing(user.id) ? 'is-following' : ''}`} type="button" onClick={() => void toggleFollow(user.id)} disabled={isFollowPending(user.id)}>{isFollowPending(user.id) ? '処理中...' : (isFollowing(user.id) ? 'フォロー中' : 'フォロー')}</button></article> })}</div></article></section>}{screen === 'settings' && <section className="search-screen"><article className="search-panel"><h2>設定</h2><h3>テーマ</h3><div className="tabs"><button className={theme === 'light' ? 'active-tab' : ''} onClick={() => setTheme('light')}>ライト</button><button className={theme === 'dark' ? 'active-tab' : ''} onClick={() => setTheme('dark')}>ダーク</button></div><h3>公開範囲の初期設定</h3><div className="visibility-grid">{(['followers','close_friends','specific','private'] as Visibility[]).map((v) => <button key={v} className={`visibility-item ${defaultVisibility === v ? 'selected' : ''}`} onClick={() => setDefaultVisibility(v)}>{visibilityComposeLabel[v]}</button>)}</div><section className="friends-settings"><h3>親しい友達</h3><p className="status-message">親しい友達に追加した人だけに届く投稿で使います。</p>{closeFriendsError && <p className="status-message status-error">{closeFriendsError}</p>}{discoverStatus === 'loaded' && discoverUsers.filter((user) => followingIds.has(user.id) && user.id !== session.user.id).length === 0 && <p className="status-message">フォロー中のユーザーがまだいません。検索から友達をフォローしてみましょう。</p>}<div className="discover-list">{discoverUsers.filter((user) => followingIds.has(user.id) && user.id !== session.user.id).map((user) => { const name = user.display_name ?? user.username; const added = closeFriendIds.has(user.id); const pending = isCloseFriendPending(user.id); return <article className="discover-user-item" key={user.id}><button type="button" className="discover-user-main" onClick={() => goToProfile(user.id)}><span className="discover-avatar" style={user.avatar_url ? { backgroundImage: `url(${user.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}>{getAvatarInitial(name)}</span><span className="discover-user-meta"><strong>{name}</strong><small>@{user.username}</small></span></button><button className={`follow-btn ${added ? 'is-following' : ''}`} type="button" onClick={() => void toggleCloseFriend(user.id)} disabled={pending}>{pending ? '処理中...' : (added ? '追加済み' : '追加')}</button></article> })}</div></section><p className="status-message">自分のテスト投稿は、ホーム/プロフィールの各投稿から削除できます。</p><button className="logout-btn" onClick={() => sb?.auth.signOut()}>ログアウト</button></article></section>}{screen === 'compose' && <section className="compose-screen"><div className="compose-topbar compose-topbar-compact"><button className="compose-close-button" aria-label="ホームに戻る" onClick={() => goToScreen('home')} type="button">×</button></div><textarea ref={composeTextareaRef} rows={2} maxLength={MAX_COMPOSE_LENGTH} value={composeText} onChange={handleComposeTextChange} onInput={adjustComposeTextareaHeight} placeholder="いまどうしてる？" className="compose-textarea" /><p className={`compose-counter ${composeText.length >= MAX_COMPOSE_LENGTH ? 'is-limit' : composeText.length >= 120 ? 'is-near-limit' : ''}`}>{composeText.length} / {MAX_COMPOSE_LENGTH}</p><article className="record-card"><div className={`record-waveform ${isRecording ? 'live' : ''}`}>{Array.from({ length: 12 }).map((_, i) => <span key={i} className="record-bar" style={{ animationDelay: `${i * 0.06}s` }} />)}</div><button className={`record-fab ${isRecording ? 'recording' : ''}`} onClick={toggleRecording} type="button">🎙</button><p>{isRecording ? '録音中... タップして停止' : 'タップして録音を開始'}</p><p>{isRecording ? formatDuration(recordingSeconds * 1000) : (recordedBlob ? formatDuration(recordedDurationMs) : '')}</p>{recordedBlob && <div className="audio-preview"><button type="button" className="voice-play-button" onClick={() => { if (!previewAudioRef.current && recordedUrl) previewAudioRef.current = new Audio(recordedUrl); void previewAudioRef.current?.play() }}><span className="play-icon">▷</span><span>再生確認</span></button><button type="button" onClick={handleClearRecordedAudio}>削除</button></div>}{recordingError && <p className="compose-error-message">{recordingError}</p>}{!isRecordSupported && <p className="compose-error-message">このブラウザでは録音に対応していません</p>}</article><div className="compose-visibility-area"><p className="compose-visibility-label">公開範囲</p><div className="visibility-chip-group">{(['followers','close_friends','specific','private'] as Visibility[]).map((v) => <button key={v} className={`visibility-chip ${composeVisibility === v ? 'active' : ''}`} onClick={() => { setComposeVisibility(v); setCustomRecipientError(''); setErrorMessage('') }} type="button">{visibilityComposeLabel[v]}</button>)}</div>{composeVisibility === 'close_friends' && closeFriendIds.size === 0 && <p className="custom-audience-inline-note">親しい友達がまだ設定されていません。</p>}{composeVisibility === 'specific' && <div className="custom-recipient-panel"><p className="custom-audience-inline-note">選択中：{selectedCustomRecipientIds.size}人</p>{followingProfiles.length === 0 ? <p className="custom-audience-inline-note">フォロー中のユーザーがいません。検索からユーザーをフォローしてください</p> : <div className="discover-list">{followingProfiles.map((user) => { const selected = selectedCustomRecipientIds.has(user.id); const name = user.display_name ?? user.username; return <button key={user.id} type="button" className={`discover-user-item ${selected ? 'is-selected' : ''}`} onClick={() => toggleCustomRecipient(user.id)}><span className="discover-user-main"><span className="discover-avatar" style={user.avatar_url ? { backgroundImage: `url(${user.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}>{getAvatarInitial(name)}</span><span className="discover-user-meta"><strong>{name}</strong><small>@{user.username}</small></span></span><span className="follow-btn">{selected ? '選択中' : '選択'}</span></button> })}</div>}{selectedCustomRecipientIds.size === 0 && <p className="custom-audience-inline-note">届けたい相手を選んでください</p>}{customRecipientError && <p className="compose-error-message">{customRecipientError}</p>}</div>}</div><div className="compose-sticky-action"><button className="compose-post-btn" disabled={(!composeText.trim() && !recordedBlob) || isPosting} onClick={handleCreatePost}>{isPosting ? '投稿中...' : '投稿する'}</button>{postingStatusMessage && <p className="compose-status-message">{postingStatusMessage}</p>}{errorMessage && <p className="compose-error-message">{errorMessage}</p>}</div></section>}</main>{showBottomNav && <nav className="bottom-nav" aria-label="メインナビ"><button className={screen === 'home' ? 'nav-active' : ''} onClick={() => goToScreen('home')}><span>🏠</span><small>ホーム</small></button><button className={screen === 'search' ? 'nav-active' : ''} onClick={() => goToScreen('search')}><span>🔎</span><small>検索</small></button><button onClick={() => goToScreen('compose')}><span>➕</span><small>投稿</small></button><button className={screen === 'profile' ? 'nav-active' : ''} onClick={() => goToScreen('profile')}><span>👤</span><small>プロフ</small></button><button className={screen === 'settings' ? 'nav-active' : ''} onClick={() => goToScreen('settings')}><span>⚙️</span><small>設定</small></button></nav>}{showGlobalFab && <button className="fab global-fab" onClick={() => goToScreen('compose')}>🎙</button>}</div>
 }
