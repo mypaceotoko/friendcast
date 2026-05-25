@@ -1170,3 +1170,14 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
   text-overflow:ellipsis;
   white-space:nowrap;
 }
+
+.friend-suggestions{
+  margin: 10px 0 14px;
+  padding: 12px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(233, 226, 255, 0.6), rgba(255,255,255,0.92));
+  border: 1px solid rgba(136,140,160,.22);
+}
+.friend-suggestions-empty{
+  margin-top: 10px;
+}
