@@ -64,6 +64,19 @@ create table if not exists public.post_recipients (
   created_at timestamptz not null default now(),
   primary key (post_id, recipient_id)
 );
+
+create table if not exists public.invites (
+  id uuid primary key default gen_random_uuid(),
+  inviter_id uuid not null references public.profiles(id) on delete cascade,
+  code text not null unique,
+  used_by uuid references public.profiles(id) on delete set null,
+  used_at timestamptz,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz,
+  status text not null default 'active',
+  constraint invites_status_check check (status in ('active','used','expired','revoked'))
+);
+
 create table if not exists public.comments (
   id uuid primary key default gen_random_uuid(),
   post_id uuid not null references public.posts(id) on delete cascade,
@@ -99,6 +112,7 @@ alter table public.post_recipients enable row level security;
 alter table public.comments enable row level security;
 alter table public.post_reposts enable row level security;
 alter table public.post_likes enable row level security;
+alter table public.invites enable row level security;
 
 drop policy if exists "profiles_select_own" on public.profiles;
 drop policy if exists "profiles_select_authenticated" on public.profiles;
@@ -233,6 +247,26 @@ grant select, insert, delete on public.post_recipients to authenticated;
 grant select, insert, delete on public.comments to authenticated;
 grant select, insert, delete on public.post_reposts to authenticated;
 grant select, insert, delete on public.post_likes to authenticated;
+grant select, insert, update on public.invites to authenticated;
+
+
+drop policy if exists "invites_select_authenticated" on public.invites;
+drop policy if exists "invites_insert_own" on public.invites;
+drop policy if exists "invites_update_mvp" on public.invites;
+create policy "invites_select_authenticated" on public.invites
+for select to authenticated
+using (true);
+create policy "invites_insert_own" on public.invites
+for insert to authenticated
+with check (auth.uid() = inviter_id);
+create policy "invites_update_mvp" on public.invites
+for update to authenticated
+using (true)
+with check (
+  inviter_id = (select inviter_id from public.invites as i where i.id = invites.id)
+  and code = (select code from public.invites as i where i.id = invites.id)
+);
+
 
 -- Storage bucket/policies (run in Supabase SQL editor)
 insert into storage.buckets (id, name, public)
