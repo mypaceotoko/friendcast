@@ -891,6 +891,11 @@ const renderAudioPlayer = (post: Post) => {
   const play = async () => {
     const asset = post.audioAsset
     if (!asset) return
+    if (!asset.storage_path || !asset.storage_bucket) {
+      setAudioLoadError((p) => ({ ...p, [post.id]: 'この投稿には再生できる音声がありません。' }))
+      setAudioLoadState((p) => ({ ...p, [post.id]: 'error' }))
+      return
+    }
     if (activeAudioPostId === post.id) {
       playAudioRef.current?.pause()
       setActiveAudioPostId(null)
@@ -914,36 +919,64 @@ const renderAudioPlayer = (post: Post) => {
       setAudioUrlMap((p) => ({ ...p, [post.id]: url! }))
       setAudioLoadState((p) => ({ ...p, [post.id]: 'ready' }))
     }
-    playAudioRef.current?.pause()
-    playAudioRef.current = new Audio(url)
-    const startAt = audioCurrentTimeMap[post.id] ?? 0
-    playAudioRef.current.currentTime = startAt
-    playAudioRef.current.playbackRate = audioPlaybackRate
-    playAudioRef.current.ontimeupdate = () => {
-      const current = playAudioRef.current?.currentTime ?? 0
-      const duration = playAudioRef.current?.duration ?? 0
-      updateTimeState(current, duration)
+    const previousAudio = playAudioRef.current
+    if (previousAudio) {
+      previousAudio.pause()
+      previousAudio.ontimeupdate = null
+      previousAudio.onpause = null
+      previousAudio.onended = null
+      previousAudio.onloadedmetadata = null
     }
-    playAudioRef.current.onpause = () => {
+    const nextAudio = new Audio()
+    nextAudio.src = url
+    const rawStartAt = audioCurrentTimeMap[post.id] ?? 0
+    const startAt = Number.isFinite(rawStartAt) && rawStartAt > 0 ? rawStartAt : 0
+    nextAudio.playbackRate = audioPlaybackRate
+    nextAudio.onloadedmetadata = () => {
+      const duration = nextAudio.duration
+      if (Number.isFinite(duration) && duration > 0) {
+        const safeStartAt = clampTime(startAt, duration)
+        if (safeStartAt > 0) nextAudio.currentTime = safeStartAt
+        updateTimeState(safeStartAt, duration)
+      } else {
+        updateTimeState(startAt)
+      }
+    }
+    nextAudio.ontimeupdate = () => {
+      const current = nextAudio.currentTime
+      const duration = nextAudio.duration
+      updateTimeState(Number.isFinite(current) ? current : 0, duration)
+    }
+    nextAudio.onpause = () => {
       setActiveAudioPostId((current) => (current === post.id ? null : current))
     }
-    playAudioRef.current.onended = () => {
+    nextAudio.onended = () => {
       setActiveAudioPostId(null)
       setPlayingCurrentTimeSeconds(0)
       setAudioCurrentTimeMap((prev) => ({ ...prev, [post.id]: 0 }))
     }
+    playAudioRef.current = nextAudio
     try {
-      await playAudioRef.current.play()
+      await nextAudio.play()
       setActiveAudioPostId(post.id)
-      const duration = playAudioRef.current.duration
+      const duration = nextAudio.duration
       updateTimeState(startAt, duration)
+      setAudioLoadState((p) => ({ ...p, [post.id]: 'ready' }))
     } catch (error) {
-      console.error('audio play failed', error)
+      const playError = error as Error & { name?: string; message?: string }
+      console.error('audio play failed', {
+        name: playError?.name ?? 'UnknownError',
+        message: playError?.message ?? 'Unknown message',
+        postId: post.id,
+        url
+      })
       setAudioLoadError((p) => ({ ...p, [post.id]: '再生できませんでした。もう一度タップしてください。' }))
       setActiveAudioPostId(null)
+      setAudioLoadState((p) => ({ ...p, [post.id]: 'error' }))
     }
   }
-  return <div className={`audio-card ${isPlaying ? 'is-active' : ''}`}><button className="audio-play audio-play-button" type="button" onClick={play}><span className={`play-icon ${isPlaying ? 'is-stop' : ''}`}>{isPlaying ? '■' : '▷'}</span></button><div className="audio-main"><button type="button" className={`audio-wave ${isPlaying ? 'playing' : ''}`} onClick={(event) => { if (!canSeek) return; const rect = event.currentTarget.getBoundingClientRect(); const ratio = (event.clientX - rect.left) / rect.width; seekToRatio(Math.min(1, Math.max(0, ratio))) }} disabled={!canSeek} aria-label="波形をタップして再生位置を移動">{Array.from({ length: 18 }).map((_, i) => <i key={i} className={progressPercent >= ((i + 1) / 18) * 100 ? 'is-past' : ''} style={{ height: `${8 + ((i % 6) * 4)}px`, animationDelay: `${i * 0.05}s` }} />)}</button><div className="audio-meta-row"><span className="audio-duration">{durationLabel}</span>{isPlaying && <small className="audio-playing-label">再生中</small>}</div><div className="audio-seek-row"><button type="button" className="audio-seek-step" onClick={() => seekBy(-15)} disabled={!canSeek}>-15秒</button><button type="button" className="audio-speed-btn" onClick={cyclePlaybackRate} aria-label={`再生速度 ${audioPlaybackRate.toFixed(1)}倍`}>{audioPlaybackRate.toFixed(1)}x</button><button type="button" className="audio-seek-step" onClick={() => seekBy(15)} disabled={!canSeek}>+15秒</button></div>{!canSeek && state === 'loading' && <small>再生準備中です...</small>}</div>{state === 'loading' && <small>読み込み中...</small>}{audioLoadError[post.id] && <small className="status-error">{audioLoadError[post.id]}</small>}</div>
+  const hasPlayableAsset = Boolean(post.audioAsset?.storage_path && post.audioAsset?.storage_bucket)
+  return <div className={`audio-card ${isPlaying ? 'is-active' : ''}`}><button className="audio-play audio-play-button" type="button" onClick={play} disabled={!hasPlayableAsset}><span className={`play-icon ${isPlaying ? 'is-stop' : ''}`}>{isPlaying ? '■' : '▷'}</span></button><div className="audio-main"><button type="button" className={`audio-wave ${isPlaying ? 'playing' : ''}`} onClick={(event) => { if (!canSeek) return; const rect = event.currentTarget.getBoundingClientRect(); const ratio = (event.clientX - rect.left) / rect.width; seekToRatio(Math.min(1, Math.max(0, ratio))) }} disabled={!canSeek} aria-label="波形をタップして再生位置を移動">{Array.from({ length: 18 }).map((_, i) => <i key={i} className={progressPercent >= ((i + 1) / 18) * 100 ? 'is-past' : ''} style={{ height: `${8 + ((i % 6) * 4)}px`, animationDelay: `${i * 0.05}s` }} />)}</button><div className="audio-meta-row"><span className="audio-duration">{durationLabel}</span>{isPlaying && <small className="audio-playing-label">再生中</small>}</div><div className="audio-seek-row"><button type="button" className="audio-seek-step" onClick={() => seekBy(-15)} disabled={!canSeek}>-15秒</button><button type="button" className="audio-speed-btn" onClick={cyclePlaybackRate} aria-label={`再生速度 ${audioPlaybackRate.toFixed(1)}倍`}>{audioPlaybackRate.toFixed(1)}x</button><button type="button" className="audio-seek-step" onClick={() => seekBy(15)} disabled={!canSeek}>+15秒</button></div>{!canSeek && state === 'loading' && <small>再生準備中です...</small>}</div>{state === 'loading' && <small>読み込み中...</small>}{audioLoadError[post.id] && <small className="status-error">{audioLoadError[post.id]}</small>}</div>
 }
 
 const getAvatarInitial = (name: string) => name.slice(0, 1).toUpperCase()
