@@ -1415,3 +1415,25 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
   .activity-avatar{width:28px;height:28px;}
   .activity-name,.activity-text{font-size:12.5px;}
 }
+
+/* v0.6.2 minimal feedback fixes */
+.post-header-main{min-width:0;display:flex;flex-direction:column;gap:2px;}
+.post-header-main .tweet-header{min-height:auto;line-height:1.2;padding:0;}
+.post-date{margin-top:0;line-height:1.2;}
+.post-content{margin-top:6px;}
+.post-sub-text.delivery-inline{margin-top:6px;}
+
+.profile-segment{display:flex;align-items:center;justify-content:center;gap:4px;min-width:0;}
+.profile-segment-count{font-variant-numeric:tabular-nums;font-size:12px;color:inherit;opacity:.9;}
+
+.voice-comment-player.audio-player{width:100%;max-width:100%;box-sizing:border-box;border:1px solid rgba(181,159,240,.55);background:linear-gradient(180deg, rgba(240,233,255,.98), rgba(248,244,255,.98));border-radius:12px;padding:8px;display:flex;align-items:center;gap:8px;min-width:0;overflow:hidden;}
+.voice-comment-player .audio-play-btn{width:36px;height:36px;min-width:36px;min-height:36px;border:0;border-radius:999px;background:#6b4ec8!important;color:#fff!important;font-weight:700;padding:0;display:grid;place-items:center;flex-shrink:0;}
+.voice-comment-player .audio-body{display:flex;align-items:center;gap:8px;flex:1;min-width:0;max-width:100%;overflow:hidden;}
+.voice-comment-player .audio-time{font-variant-numeric:tabular-nums;white-space:nowrap;color:#5d4a91;font-weight:700;font-size:12px;flex-shrink:0;}
+.voice-comment-player .audio-wave{display:flex;align-items:center;gap:3px;min-width:0;flex:1;padding:0;border:0;background:none;min-height:0;cursor:default;}
+.voice-comment-player .audio-wave span{display:block;width:4px;height:14px;border-radius:999px;background:linear-gradient(180deg,#9f88ef,#6f51cf,#b8aaf4);opacity:.78;}
+.voice-comment-player .audio-rate-btn{border:0;background:rgba(103,75,181,.14)!important;color:#5f44b1!important;border-radius:999px;padding:6px 10px;min-height:32px;font-size:12px;font-weight:700;flex-shrink:0;}
+
+.search-panel .friend-suggestions,.profile-tabs,.tweet-item,.audio-card,.voice-comment-player,.activity-card{width:100%;max-width:100%;box-sizing:border-box;min-width:0;}
+.search-panel .friend-suggestions *, .profile-tabs *, .tweet-item *, .voice-comment-player *, .activity-card *{min-width:0;}
+.search-panel .discover-user-meta strong,.search-panel .discover-user-meta small,.post-text,.activity-content,.voice-comment-wrap{overflow-wrap:anywhere;}
