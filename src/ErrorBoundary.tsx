@@ -17,7 +17,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: unknown, errorInfo: { componentStack?: string }) {
-    console.error('App crashed with runtime error', error, errorInfo)
+    console.error('App crashed with runtime error', {
+      error,
+      componentStack: errorInfo?.componentStack ?? ''
+    })
   }
 
   render() {
