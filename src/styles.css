@@ -1477,6 +1477,10 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
 .voice-comment-player .audio-seek-row{gap:6px;}
 .voice-comment-player .audio-seek-step,
 .voice-comment-player .audio-speed-btn{min-height:34px; font-size:12px;}
+.voice-comment-seek-row{width:100%;max-width:100%;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:6px;overflow:hidden;}
+.voice-comment-seek-row .audio-seek-step,.voice-comment-seek-row .audio-speed-btn{flex:1 1 30%;min-width:84px;}
+.voice-comment-speed-btn{max-width:110px;}
+@media (max-width:430px){.voice-comment-seek-row .audio-seek-step,.voice-comment-seek-row .audio-speed-btn{min-width:72px;}}
 
 .search-panel .friend-suggestions,.profile-tabs,.tweet-item,.audio-card,.voice-comment-player,.activity-card{width:100%;max-width:100%;box-sizing:border-box;min-width:0;}
 .search-panel .friend-suggestions *, .profile-tabs *, .tweet-item *, .voice-comment-player *, .activity-card *{min-width:0;}
