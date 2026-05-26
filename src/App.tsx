@@ -377,6 +377,8 @@ const clearRecordedAudio = () => {
 }
 
 const handleClearRecordedAudio = () => {
+  const confirmed = window.confirm('本当に録音を削除しますか？\nこの操作は取り消せません。')
+  if (!confirmed) return
   clearRecordedAudio()
 }
 
