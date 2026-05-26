@@ -993,7 +993,22 @@ const filteredDiscoverUsers = useMemo(() => {
     return name.includes(normalizedSearchQuery) || username.includes(normalizedSearchQuery)
   })
 }, [discoverUsers, normalizedSearchQuery])
-const visibleFriendSuggestions = useMemo(() => friendSuggestions.filter((user) => !followingIds.has(user.id) && user.id !== session?.user.id), [friendSuggestions, followingIds, session?.user.id])
+const visibleFriendSuggestions = useMemo(() => {
+  const myId = session?.user.id
+  const uniqueById = new Map<string, Profile>()
+  friendSuggestions.forEach((user) => {
+    if (!user.id) return
+    if (user.id === myId) return
+    if (!uniqueById.has(user.id)) uniqueById.set(user.id, user)
+  })
+  const ordered = Array.from(uniqueById.values()).sort((a, b) => {
+    const aFollowing = followingIds.has(a.id)
+    const bFollowing = followingIds.has(b.id)
+    if (aFollowing === bFollowing) return 0
+    return aFollowing ? 1 : -1
+  })
+  return ordered.slice(0, 8)
+}, [friendSuggestions, followingIds, session?.user.id])
 const hasFollowingPosts = useMemo(() => {
   const myId = session?.user.id
   if (!myId) return false
