@@ -1466,6 +1466,7 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
 .post-header-main .tweet-header{min-height:auto;line-height:1.2;padding:0;}
 .post-date{margin-top:0;line-height:1.2;}
 .post-content{margin-top:6px;}
+.post-text{margin:0;}
 .post-sub-text.delivery-inline{margin-top:6px;}
 
 .profile-segment{display:flex;align-items:center;justify-content:center;gap:4px;min-width:0;}
