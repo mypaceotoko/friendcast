@@ -1347,8 +1347,18 @@ useEffect(() => {
   }
   const targetProfileId = viewingProfileId ?? session?.user?.id ?? ''
   if (screen !== 'profile' || !targetProfileId || !session?.user?.id) return
-  void loadProfileFollowData(targetProfileId)
+  void loadProfileFollowCounts(targetProfileId)
 }, [screen, viewingProfileId, session?.user?.id, followingIds])
+useEffect(() => {
+  if (!ENABLE_PROFILE_FOLLOW_LISTS) {
+    setProfileFollowingUsers([])
+    setProfileFollowerUsers([])
+    return
+  }
+  const targetProfileId = viewingProfileId ?? session?.user?.id ?? ''
+  if (screen !== 'profile' || !targetProfileId || !session?.user?.id) return
+  void loadProfileFollowLists(targetProfileId)
+}, [screen, viewingProfileId, session?.user?.id, profileFollowListMode])
 
 if (!isSupabaseConfigured || !supabase) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p className="status-message status-error">設定エラー: Supabaseの環境変数が不足しています。</p><p>VITE_SUPABASE_URL と VITE_SUPABASE_ANON_KEY を Vercel Preview に設定してください。</p></article></main></div>
 if (initialAuthLoading) return <div className={`app-shell theme-${resolvedTheme}`}><div className="login-card"><h1>friendcast</h1><p>ログイン状態を確認中です...（最大8秒）</p></div></div>
@@ -1461,10 +1471,8 @@ const togglePostRepost = async (postId: string) => {
 }
 
 
-const loadProfileFollowData = async (targetProfileId: string) => {
+const loadProfileFollowCounts = async (targetProfileId: string) => {
   if (!ENABLE_PROFILE_FOLLOW_COUNTS || !sb || !session?.user?.id || !targetProfileId) return
-  setProfileFollowListLoading(true)
-  setProfileFollowListError('')
   try {
     const [{ count: followingCount, error: followingErr }, { count: followerCount, error: followerErr }] = await Promise.all([
       sb.from('follows').select('following_id', { count: 'exact', head: true }).eq('follower_id', targetProfileId),
@@ -1477,53 +1485,59 @@ const loadProfileFollowData = async (targetProfileId: string) => {
     } else {
       setProfileFollowCounts({ following: followingCount ?? 0, followers: followerCount ?? 0 })
     }
-    if (!ENABLE_PROFILE_FOLLOW_LISTS) {
+  } catch (error) {
+    console.error('load profile follow counts failed', error)
+    setProfileFollowListError('フォロー件数の取得に失敗しました。')
+    setProfileFollowCounts({ following: 0, followers: 0 })
+  }
+}
+
+const loadProfileFollowLists = async (targetProfileId: string) => {
+  if (!ENABLE_PROFILE_FOLLOW_LISTS || !sb || !session?.user?.id || !targetProfileId) return
+  setProfileFollowListLoading(true)
+  setProfileFollowListError('')
+  try {
+    const [
+      { data: followingRows, error: followingListError },
+      { data: followerRows, error: followerListError }
+    ] = await Promise.all([
+      sb.from('follows').select('following_id').eq('follower_id', targetProfileId),
+      sb.from('follows').select('follower_id').eq('following_id', targetProfileId)
+    ])
+    if (followingListError || followerListError) {
+      console.error('load profile follow list ids failed', followingListError ?? followerListError)
+      setProfileFollowListError('一覧を読み込めませんでした')
       setProfileFollowingUsers([])
       setProfileFollowerUsers([])
     } else {
+      const followingIds = Array.from(new Set((followingRows ?? []).map((row) => row.following_id).filter((id): id is string => !!id)))
+      const followerIds = Array.from(new Set((followerRows ?? []).map((row) => row.follower_id).filter((id): id is string => !!id)))
       const [
-        { data: followingRows, error: followingListError },
-        { data: followerRows, error: followerListError }
+        { data: followingProfiles, error: followingProfilesError },
+        { data: followerProfiles, error: followerProfilesError }
       ] = await Promise.all([
-        sb.from('follows').select('following_id').eq('follower_id', targetProfileId),
-        sb.from('follows').select('follower_id').eq('following_id', targetProfileId)
+        followingIds.length > 0
+          ? sb.from('profiles').select('id,username,display_name,avatar_url,bio').in('id', followingIds)
+          : Promise.resolve({ data: [], error: null }),
+        followerIds.length > 0
+          ? sb.from('profiles').select('id,username,display_name,avatar_url,bio').in('id', followerIds)
+          : Promise.resolve({ data: [], error: null })
       ])
-      if (followingListError || followerListError) {
-        console.error('load profile follow list ids failed', followingListError ?? followerListError)
+      if (followingProfilesError || followerProfilesError) {
+        console.error('load profile follow list profiles failed', followingProfilesError ?? followerProfilesError)
         setProfileFollowListError('一覧を読み込めませんでした')
         setProfileFollowingUsers([])
         setProfileFollowerUsers([])
       } else {
-        const followingIds = Array.from(new Set((followingRows ?? []).map((row) => row.following_id).filter((id): id is string => !!id)))
-        const followerIds = Array.from(new Set((followerRows ?? []).map((row) => row.follower_id).filter((id): id is string => !!id)))
-        const [
-          { data: followingProfiles, error: followingProfilesError },
-          { data: followerProfiles, error: followerProfilesError }
-        ] = await Promise.all([
-          followingIds.length > 0
-            ? sb.from('profiles').select('id,username,display_name,avatar_url,bio').in('id', followingIds)
-            : Promise.resolve({ data: [], error: null }),
-          followerIds.length > 0
-            ? sb.from('profiles').select('id,username,display_name,avatar_url,bio').in('id', followerIds)
-            : Promise.resolve({ data: [], error: null })
-        ])
-        if (followingProfilesError || followerProfilesError) {
-          console.error('load profile follow list profiles failed', followingProfilesError ?? followerProfilesError)
-          setProfileFollowListError('一覧を読み込めませんでした')
-          setProfileFollowingUsers([])
-          setProfileFollowerUsers([])
-        } else {
-          setProfileFollowingUsers(Array.isArray(followingProfiles) ? followingProfiles : [])
-          setProfileFollowerUsers(Array.isArray(followerProfiles) ? followerProfiles : [])
-        }
+        setProfileFollowingUsers(Array.isArray(followingProfiles) ? followingProfiles : [])
+        setProfileFollowerUsers(Array.isArray(followerProfiles) ? followerProfiles : [])
       }
     }
   } catch (error) {
-    console.error('load profile follow data failed', error)
+    console.error('load profile follow lists failed', error)
     setProfileFollowListError('一覧を読み込めませんでした')
     setProfileFollowingUsers([])
     setProfileFollowerUsers([])
-    setProfileFollowCounts({ following: 0, followers: 0 })
   } finally {
     setProfileFollowListLoading(false)
   }
