@@ -209,8 +209,8 @@ button { cursor: pointer; }
 .profile-pinned-avatar { background: linear-gradient(135deg,#112f3a,#0f2330); }
 .profile-pinned-main .tweet-header { font-size: 12px; margin-bottom: 8px; }
 .profile-pinned-main .tweet-text { font-size: 16px; color: #11192f; }
-.search-screen { display: grid; gap: 12px; width: 100%; max-width: 720px; margin-inline: auto; padding-inline: 16px; box-sizing: border-box; overflow-x: clip; }
-.search-panel { width: 100%; max-width: 100%; box-sizing: border-box; border: 1px solid rgba(136,140,160,.24); border-radius: 18px; padding: 14px; background: rgba(255,255,255,.68); margin-inline: auto; overflow-x: clip; }
+.search-screen { display: grid; gap: 12px; width: 100%; max-width: 720px; margin-inline: auto; padding-inline: 16px; box-sizing: border-box; overflow-x: hidden; }
+.search-panel { width: 100%; max-width: 100%; box-sizing: border-box; border: 1px solid rgba(136,140,160,.24); border-radius: 18px; padding: 14px; background: rgba(255,255,255,.68); margin-inline: auto; overflow-x: hidden; }
 .search-panel h2 { margin: 0 0 12px; font-size: 34px; line-height: 1.1; }
 .search-panel h3 { margin: 0 0 10px; font-size: 20px; color: #2f3f68; }
 .search-panel input { margin-bottom: 8px; }
@@ -1213,6 +1213,25 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
 
 .search-panel .discover-user-item{
   padding-inline:4px;
+}
+
+
+.search-panel .discover-user-main:where(button){
+  width:auto;
+  flex:1 1 auto;
+  min-width:0;
+}
+
+.search-panel .discover-user-meta{
+  min-width:0;
+}
+
+.search-panel .discover-user-meta strong,
+.search-panel .discover-user-meta small,
+.search-panel .discover-user-meta span{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
 }
 
 .search-panel .follow-btn{
