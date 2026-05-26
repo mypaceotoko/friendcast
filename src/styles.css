@@ -1251,9 +1251,47 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
   margin-top: 10px;
 }
 
-.search-panel .discover-list,
-.search-panel .discover-user-item,
-.search-panel .discover-user-main,
+/* v0.7.2 tighten post body spacing under date */
+.screen-home .post-header,
+.profile-screen .post-header{
+  margin-bottom:0;
+  padding-bottom:0;
+}
+
+.screen-home .post-header-main,
+.profile-screen .post-header-main{
+  gap:0;
+}
+
+.screen-home .post-date,
+.profile-screen .post-date{
+  margin:0;
+  padding:0;
+}
+
+.screen-home .post-content,
+.profile-screen .post-content{
+  margin-top:1px;
+  padding-top:0;
+}
+
+.screen-home .post-content > :first-child,
+.profile-screen .post-content > :first-child{
+  margin-top:0;
+  padding-top:0;
+}
+
+.screen-home .post-text,
+.profile-screen .post-text,
+.screen-home .post-content .audio-player,
+.profile-screen .post-content .audio-player,
+.screen-home .post-content .post-audio,
+.profile-screen .post-content .post-audio,
+.screen-home .post-content .voice-player,
+.profile-screen .post-content .voice-player{
+  margin-top:0;
+  padding-top:0;
+}
 .search-panel .friend-suggestions{
   width:100%;
   max-width:100%;
