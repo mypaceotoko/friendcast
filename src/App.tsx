@@ -986,13 +986,19 @@ const followingProfiles = useMemo(() => discoverUsers.filter((user) => following
 const normalizedSearchQuery = searchQuery.trim().toLowerCase()
 const isSearchingUsers = normalizedSearchQuery.length > 0
 const filteredDiscoverUsers = useMemo(() => {
-  if (!normalizedSearchQuery) return discoverUsers
-  return discoverUsers.filter((user) => {
+  const myId = session?.user.id
+  const uniqueById = new Map<string, Profile>()
+  discoverUsers.forEach((user) => {
+    if (!user.id) return
+    if (user.id === myId) return
+    if (!normalizedSearchQuery) return
     const name = (user.display_name ?? '').toLowerCase()
     const username = (user.username ?? '').toLowerCase()
-    return name.includes(normalizedSearchQuery) || username.includes(normalizedSearchQuery)
+    if (!name.includes(normalizedSearchQuery) && !username.includes(normalizedSearchQuery)) return
+    if (!uniqueById.has(user.id)) uniqueById.set(user.id, user)
   })
-}, [discoverUsers, normalizedSearchQuery])
+  return Array.from(uniqueById.values())
+}, [discoverUsers, normalizedSearchQuery, session?.user.id])
 const visibleFriendSuggestions = useMemo(() => {
   const myId = session?.user.id
   const uniqueById = new Map<string, Profile>()
