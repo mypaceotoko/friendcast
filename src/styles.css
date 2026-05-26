@@ -1129,6 +1129,39 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
 }
 
 .search-screen,.search-panel{padding-bottom:calc(96px + env(safe-area-inset-bottom));}
+
+.settings-screen{
+  width:100%;
+  max-width:720px;
+  margin-inline:auto;
+  overflow-x:hidden;
+}
+.settings-panel{
+  width:100%;
+  max-width:100%;
+  margin-inline:auto;
+  box-sizing:border-box;
+  overflow-x:hidden;
+}
+.settings-panel .settings-card,
+.settings-panel .friends-settings,
+.settings-panel .invite-settings{
+  width:100%;
+  max-width:100%;
+  margin-inline:auto;
+  box-sizing:border-box;
+}
+.settings-panel .settings-toggle-btn{
+  margin-inline:auto;
+}
+.settings-panel .settings-card > .follow-btn.settings-toggle-btn,
+.settings-panel .friends-settings > .follow-btn.settings-toggle-btn,
+.settings-panel .invite-settings > .follow-btn.settings-toggle-btn{
+  margin-inline-start:0;
+}
+.settings-panel .invite-use-row > input{
+  min-width:0;
+}
 .search-panel .discover-list{width:100%;max-width:100%;box-sizing:border-box;}
 
 @media (max-width:430px){
