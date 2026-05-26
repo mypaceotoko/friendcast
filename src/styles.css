@@ -209,8 +209,8 @@ button { cursor: pointer; }
 .profile-pinned-avatar { background: linear-gradient(135deg,#112f3a,#0f2330); }
 .profile-pinned-main .tweet-header { font-size: 12px; margin-bottom: 8px; }
 .profile-pinned-main .tweet-text { font-size: 16px; color: #11192f; }
-.search-screen { display: grid; gap: 12px; width: 100%; max-width: 720px; margin-inline: auto; padding-inline: 16px; box-sizing: border-box; }
-.search-panel { width: 100%; max-width: 100%; box-sizing: border-box; border: 1px solid rgba(136,140,160,.24); border-radius: 18px; padding: 14px; background: rgba(255,255,255,.68); }
+.search-screen { display: grid; gap: 12px; width: 100%; max-width: 720px; margin-inline: auto; padding-inline: 16px; box-sizing: border-box; overflow-x: clip; }
+.search-panel { width: 100%; max-width: 100%; box-sizing: border-box; border: 1px solid rgba(136,140,160,.24); border-radius: 18px; padding: 14px; background: rgba(255,255,255,.68); margin-inline: auto; overflow-x: clip; }
 .search-panel h2 { margin: 0 0 12px; font-size: 34px; line-height: 1.1; }
 .search-panel h3 { margin: 0 0 10px; font-size: 20px; color: #2f3f68; }
 .search-panel input { margin-bottom: 8px; }
@@ -314,8 +314,8 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
 .invite-close-friend-add-btn:disabled{opacity:.8;}
 .search-status{padding:10px 0;}
 .discover-list{display:flex;flex-direction:column;gap:8px;width:100%;max-width:100%;box-sizing:border-box;}
-.discover-user-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid rgba(122,117,131,.14);width:100%;max-width:100%;box-sizing:border-box;}
-.discover-user-main{border:0;background:transparent!important;padding:0;display:flex;align-items:center;gap:10px;min-width:0;max-width:100%;text-align:left;box-sizing:border-box;}
+.discover-user-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid rgba(122,117,131,.14);width:100%;max-width:100%;box-sizing:border-box;min-width:0;}
+.discover-user-main{border:0;background:transparent!important;padding:0;display:flex;align-items:center;gap:10px;min-width:0;max-width:100%;flex:1 1 auto;text-align:left;box-sizing:border-box;}
 .discover-user-main:where(button){width:100%;max-width:100%;border-radius:12px;padding:6px;cursor:pointer;transition:background-color .16s ease;box-sizing:border-box;}
 .discover-user-main:where(button):hover,.discover-user-main:where(button):focus-visible{background:rgba(189,170,235,.18);outline:none;}
 .discover-user-main:where(button):active{background:rgba(189,170,235,.24);}
@@ -1200,6 +1200,29 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
 }
 .friend-suggestions-empty{
   margin-top: 10px;
+}
+
+.search-panel .discover-list,
+.search-panel .discover-user-item,
+.search-panel .discover-user-main,
+.search-panel .friend-suggestions{
+  width:100%;
+  max-width:100%;
+  box-sizing:border-box;
+}
+
+.search-panel .discover-user-item{
+  padding-inline:4px;
+}
+
+.search-panel .follow-btn{
+  flex-shrink:0;
+  margin-inline-start:8px;
+}
+
+@media (max-width:430px){
+  .search-screen{padding-inline:12px;}
+  .search-panel{padding:12px;}
 }
 
 .comment-reply-tabs{
