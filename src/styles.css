@@ -311,6 +311,9 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
 .discover-list{display:flex;flex-direction:column;gap:8px;}
 .discover-user-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid rgba(122,117,131,.14);}
 .discover-user-main{border:0;background:transparent!important;padding:0;display:flex;align-items:center;gap:10px;min-width:0;text-align:left;}
+.discover-user-main:where(button){width:100%;border-radius:12px;padding:6px;cursor:pointer;transition:background-color .16s ease;}
+.discover-user-main:where(button):hover,.discover-user-main:where(button):focus-visible{background:rgba(189,170,235,.18);outline:none;}
+.discover-user-main:where(button):active{background:rgba(189,170,235,.24);}
 .discover-avatar{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#e69f75,#e0c5ab);display:grid;place-items:center;font-weight:700;color:#fff;flex-shrink:0;}
 .discover-user-meta{display:flex;flex-direction:column;min-width:0;}
 .discover-user-meta strong,.discover-user-meta small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
