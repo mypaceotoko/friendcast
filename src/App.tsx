@@ -1623,7 +1623,7 @@ const handleDeleteComment = async (postId: string, comment: CommentRow) => {
 }
 
 
-const stopVoiceCommentPlayback = (resetTime = false) => {
+function stopVoiceCommentPlayback(resetTime = false) {
   const audio = voiceCommentAudioRef.current
   if (audio) {
     audio.pause()
