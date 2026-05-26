@@ -1336,6 +1336,27 @@ useEffect(() => {
 }, [postsStatus, posts.length, followingIds.size])
 
 useEffect(() => { if (session?.user?.id) void loadMyInvites() }, [session?.user?.id])
+useEffect(() => {
+  if (!ENABLE_PROFILE_FOLLOW_STATS) {
+    setProfileFollowListMode('posts')
+    setProfileFollowListLoading(false)
+    setProfileFollowListError('')
+    setProfileFollowingUsers([])
+    setProfileFollowerUsers([])
+    setProfileFollowCounts({ following: 0, followers: 0 })
+    return
+  }
+  const targetProfileId = viewingProfileId ?? session?.user?.id ?? ''
+  if (screen !== 'profile' || !targetProfileId || !session?.user?.id) return
+  loadProfileFollowData(targetProfileId).catch((error) => {
+    console.error('profile follow data effect failed', error)
+    setProfileFollowListError('フォロー情報の取得に失敗しました。時間をおいて再度お試しください。')
+    setProfileFollowingUsers([])
+    setProfileFollowerUsers([])
+    setProfileFollowCounts({ following: 0, followers: 0 })
+    setProfileFollowListLoading(false)
+  })
+}, [screen, viewingProfileId, session?.user?.id, followingIds])
 
 if (!isSupabaseConfigured || !supabase) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p className="status-message status-error">設定エラー: Supabaseの環境変数が不足しています。</p><p>VITE_SUPABASE_URL と VITE_SUPABASE_ANON_KEY を Vercel Preview に設定してください。</p></article></main></div>
 if (initialAuthLoading) return <div className={`app-shell theme-${resolvedTheme}`}><div className="login-card"><h1>friendcast</h1><p>ログイン状態を確認中です...（最大8秒）</p></div></div>
@@ -1481,28 +1502,6 @@ const loadProfileFollowData = async (targetProfileId: string) => {
     setProfileFollowListLoading(false)
   }
 }
-
-useEffect(() => {
-  if (!ENABLE_PROFILE_FOLLOW_STATS) {
-    setProfileFollowListMode('posts')
-    setProfileFollowListLoading(false)
-    setProfileFollowListError('')
-    setProfileFollowingUsers([])
-    setProfileFollowerUsers([])
-    setProfileFollowCounts({ following: 0, followers: 0 })
-    return
-  }
-  const targetProfileId = viewingProfileId ?? session?.user?.id ?? ''
-  if (screen !== 'profile' || !targetProfileId || !session?.user?.id) return
-  loadProfileFollowData(targetProfileId).catch((error) => {
-    console.error('profile follow data effect failed', error)
-    setProfileFollowListError('フォロー情報の取得に失敗しました。時間をおいて再度お試しください。')
-    setProfileFollowingUsers([])
-    setProfileFollowerUsers([])
-    setProfileFollowCounts({ following: 0, followers: 0 })
-    setProfileFollowListLoading(false)
-  })
-}, [screen, viewingProfileId, session?.user?.id, followingIds])
 
 const toggleFollow = async (targetUserId: string) => {
   if (!session?.user || targetUserId === session.user.id || isFollowPending(targetUserId)) return
