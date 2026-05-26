@@ -1118,10 +1118,16 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
 .settings-card,.friends-settings,.invite-settings{border:1px solid rgba(122,117,131,.2);border-radius:14px;padding:12px 14px;margin-top:10px;background:rgba(255,255,255,.68);box-sizing:border-box;}
 .theme-dark .settings-card,.theme-dark .friends-settings,.theme-dark .invite-settings{background:rgba(24,31,52,.7);border-color:rgba(129,153,220,.35);}
 .search-panel .settings-card,.search-panel .friends-settings,.search-panel .invite-settings{padding-inline:14px;}
-.settings-toggle-btn{display:block;width:calc(100% - 24px);max-width:calc(100% - 24px);margin:10px auto 0;box-sizing:border-box;}
+.settings-toggle-btn{display:block;width:100%;max-width:100%;margin:10px auto 0;box-sizing:border-box;}
 .search-panel .settings-toggle-btn{margin-inline:auto;}
 .settings-card .settings-toggle-btn,.settings-section .settings-toggle-btn{margin-left:auto;margin-right:auto;}
 .search-panel .logout-btn{width:100%;min-height:46px;margin-top:0;}
+.search-panel .settings-card > .follow-btn.settings-toggle-btn,
+.search-panel .friends-settings > .follow-btn.settings-toggle-btn,
+.search-panel .invite-settings > .follow-btn.settings-toggle-btn{
+  margin-inline-start:0;
+}
+
 .search-screen,.search-panel{padding-bottom:calc(96px + env(safe-area-inset-bottom));}
 .search-panel .discover-list{width:100%;max-width:100%;box-sizing:border-box;}
 
@@ -1237,7 +1243,8 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
   white-space:nowrap;
 }
 
-.search-panel .follow-btn{
+.search-panel .discover-user-item > .follow-btn,
+.search-panel .invite-actions > .follow-btn{
   flex-shrink:0;
   margin-inline-start:8px;
 }
