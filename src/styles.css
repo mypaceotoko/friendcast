@@ -1470,17 +1470,13 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
 .profile-segment{display:flex;align-items:center;justify-content:center;gap:4px;min-width:0;}
 .profile-segment-count{font-variant-numeric:tabular-nums;font-size:12px;color:inherit;opacity:.9;}
 
-.voice-comment-player.audio-card{margin:0; padding:8px 10px; border-radius:18px; background:linear-gradient(180deg,#ece8ff,#e1dcff)!important;}
-.voice-comment-player .audio-play{width:38px; height:38px; min-width:38px; min-height:38px; font-size:18px;}
-.voice-comment-player .audio-wave{min-height:36px; padding:4px 0;}
-.voice-comment-player .audio-duration{font-size:13px;}
-.voice-comment-player .audio-seek-row{gap:6px;}
-.voice-comment-player .audio-seek-step,
-.voice-comment-player .audio-speed-btn{min-height:34px; font-size:12px;}
-.voice-comment-seek-row{width:100%;max-width:100%;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:6px;overflow:hidden;}
-.voice-comment-seek-row .audio-seek-step,.voice-comment-seek-row .audio-speed-btn{flex:1 1 30%;min-width:84px;}
-.voice-comment-speed-btn{max-width:110px;}
-@media (max-width:430px){.voice-comment-seek-row .audio-seek-step,.voice-comment-seek-row .audio-speed-btn{min-width:72px;}}
+.voice-comment-player.audio-card{margin:0;padding:10px 12px;border-radius:18px;background:linear-gradient(180deg,#efeaff,#e3dbff)!important;border:1px solid rgba(103,75,181,.18);}
+.voice-comment-player .audio-play{width:38px;height:38px;min-width:38px;min-height:38px;font-size:18px;background:#6a4fbb;}
+.voice-comment-player .audio-main{gap:4px;}
+.voice-comment-player .audio-wave{min-height:34px;padding:3px 0;}
+.voice-comment-player .audio-wave i{width:4px;opacity:.7;}
+.voice-comment-player .audio-duration{font-size:13px;color:#5f43b4;}
+.voice-comment-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;}
 
 .search-panel .friend-suggestions,.profile-tabs,.tweet-item,.audio-card,.voice-comment-player,.activity-card{width:100%;max-width:100%;box-sizing:border-box;min-width:0;}
 .search-panel .friend-suggestions *, .profile-tabs *, .tweet-item *, .voice-comment-player *, .activity-card *{min-width:0;}
