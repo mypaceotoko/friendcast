@@ -2092,8 +2092,35 @@ const useInviteCode = async (rawCode?: string) => {
 const visibleInvites = myInvites.filter((invite) => invite.status !== 'revoked')
 const toActivityPostPreview = (postId: string) => { const post = posts.find((item) => item.id === postId); if (!post) return '削除済みの投稿'; const text = (post.text ?? '').trim(); if (text) return text.slice(0, 30); return post.audioAsset ? '音声投稿' : '投稿'; }
 
+const closeAllTimelineCommentUi = () => {
+  setOpenedCommentsPostId(null)
+  setCommentInputMap({})
+  setCommentReplyModeByPostId({})
+  setCommentPostingMap({})
+  setVoiceCommentPostingMap({})
+  setVoiceReplyErrorByPostId({})
+  setVoiceReplySuccessByPostId({})
+  setVoiceReplyRecordingSecondsByPostId({})
+  setVoiceReplyPreviewCurrentTimeByPostId({})
+
+  if (playingVoiceCommentId) stopVoiceCommentPlayback(true)
+  stopVoiceReplyPreview(true)
+
+  if (voiceReplyRecordingPostId) stopVoiceReplyRecorder()
+  setVoiceReplyRecordingPostId(null)
+  setVoiceReplyPreviewPlayingPostId(null)
+  setVoiceReplyBlobByPostId({})
+  setVoiceReplyDurationByPostId({})
+  setVoiceReplyErrorByPostId({})
+  setVoiceReplySuccessByPostId({})
+
+  Object.values(voiceReplyPreviewUrlByPostId).forEach((url) => URL.revokeObjectURL(url))
+  setVoiceReplyPreviewUrlByPostId({})
+}
+
 const handleRefreshHomeTimeline = async () => {
   if (screen !== 'home' || postsStatus === 'loading') return
+  closeAllTimelineCommentUi()
   try {
     await loadPosts()
   } catch (error) {
