@@ -233,6 +233,9 @@ button { cursor: pointer; }
 .theme-dark .profile-block,.theme-dark .profile-pinned,.theme-dark .profile-tabs { background: #151a2a; }
 .theme-dark .profile-name,.theme-dark .profile-bio,.theme-dark .profile-follow-row strong { color: #edf1ff; }
 .theme-dark .profile-follow-row,.theme-dark .profile-pinned-main .tweet-text { color: #d8dff7; }
+.theme-dark .profile-tabs button { color: #bfccef; }
+.theme-dark .profile-tabs .active-tab { color: #f8f7ff; }
+.theme-dark .profile-tabs .active-tab::after { background: #6a4cc7; }
 
 .login-screen { min-height: 70vh; display:flex; align-items:center; justify-content:center; }
 .login-card { background: rgba(255,255,255,.78); border: 1px solid rgba(115,140,220,.28); border-radius: 24px; padding: 28px 22px; text-align:center; max-width: 360px; }
