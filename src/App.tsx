@@ -79,10 +79,10 @@ const getInviteShareText = (code: string) => `friendcastに招待しました！
 
 
 const HEADER_AVATAR_CIRCLE = {
-  x: 213,
-  y: 207,
-  width: 254,
-  height: 254,
+  x: 205,
+  y: 199,
+  width: 270,
+  height: 270,
   imageWidth: 2100,
   imageHeight: 496
 } as const
