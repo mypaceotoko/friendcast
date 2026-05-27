@@ -2,6 +2,7 @@
 * { box-sizing: border-box; }
 body { margin: 0; }
 .app-shell { --bg: radial-gradient(circle at top, #1b2558, #0b0f1f 55%, #090b14); --text:#edf1ff; --glass:rgba(18,22,42,.65); --line:rgba(140,160,255,.25); --soft:rgba(16,20,35,.9); background: var(--bg); color: var(--text); max-width: 480px; margin: 0 auto; min-height: 100vh; min-height: 100dvh; padding: 12px 12px calc(88px + env(safe-area-inset-bottom)); }
+.theme-dark { --bg: radial-gradient(circle at top, #0b1530, #071126 58%, #060d1f); --text:#f7f8ff; --glass:rgba(17,27,52,.84); --line:rgba(180,200,255,.28); --soft:rgba(23,33,58,.94); }
 .theme-light { --bg: radial-gradient(circle at top, #f8fbff, #e9f0ff 55%, #dde7ff); --text:#162036; --glass:rgba(255,255,255,.74); --line:rgba(115,140,220,.35); --soft:rgba(255,255,255,.93); }
 .theme-light .app-header p,.theme-light .intro-copy { color: #4e628f; }
 .theme-light .timeline-list { border-top-color: rgba(121, 145, 218, 0.3); }
@@ -1132,7 +1133,7 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
 .audio-wave{min-width:0;max-width:100%;}
 
 .settings-card,.friends-settings,.invite-settings{border:1px solid rgba(122,117,131,.2);border-radius:14px;padding:12px 14px;margin-top:10px;background:rgba(255,255,255,.68);box-sizing:border-box;}
-.theme-dark .settings-card,.theme-dark .friends-settings,.theme-dark .invite-settings{background:rgba(24,31,52,.7);border-color:rgba(129,153,220,.35);}
+.theme-dark .settings-card,.theme-dark .friends-settings,.theme-dark .invite-settings{background:linear-gradient(180deg,rgba(23,33,58,.96),rgba(17,27,52,.96));border-color:rgba(180,200,255,.28);box-shadow:0 8px 24px rgba(4,8,20,.35);}
 .search-panel .settings-card,.search-panel .friends-settings,.search-panel .invite-settings{padding-inline:14px;}
 .settings-toggle-btn{display:block;width:100%;max-width:100%;margin:10px auto 0;box-sizing:border-box;}
 .search-panel .settings-toggle-btn{margin-inline:auto;}
@@ -1177,6 +1178,70 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
 }
 .settings-panel .invite-use-row > input{
   min-width:0;
+}
+.theme-dark .search-panel{
+  background:rgba(15,23,45,.9);
+  border-color:rgba(180,200,255,.24);
+}
+.theme-dark .settings-panel h2{
+  color:#ffffff;
+}
+.theme-dark .settings-panel h3,
+.theme-dark .settings-panel .settings-card h3{
+  color:#eef2ff;
+}
+.theme-dark .settings-panel .status-message{
+  color:#b8c4e6;
+}
+.theme-dark .settings-panel .status-message.status-error{
+  color:#ff98b4;
+}
+.theme-dark .settings-panel .tabs button{
+  background:rgba(17,27,52,.9) !important;
+  border-color:rgba(180,200,255,.28);
+  color:#d7e0ff;
+}
+.theme-dark .settings-panel .tabs .active-tab{
+  color:#f8f9ff;
+  border-color:#63e6ff !important;
+  box-shadow:0 0 0 1px rgba(99,230,255,.45),0 6px 16px rgba(38,95,160,.24);
+}
+.theme-dark .settings-panel .visibility-item{
+  background:rgba(18,29,56,.88) !important;
+  border-color:rgba(167,184,245,.34);
+  color:#f2f5ff;
+}
+.theme-dark .settings-panel .visibility-item.selected{
+  background:linear-gradient(145deg,rgba(78,62,145,.6),rgba(40,98,139,.52)) !important;
+  border-color:#63e6ff;
+  color:#ffffff;
+}
+.theme-dark .settings-panel input,
+.theme-dark .settings-panel textarea,
+.theme-dark .settings-panel select{
+  background:#111b34;
+  border-color:rgba(180,200,255,.28);
+  color:#f7f8ff;
+}
+.theme-dark .settings-panel input::placeholder,
+.theme-dark .settings-panel textarea::placeholder{
+  color:#9dafd8;
+  opacity:1;
+}
+.theme-dark .settings-panel .follow-btn{
+  background:rgba(99,230,255,.16) !important;
+  border-color:rgba(99,230,255,.44) !important;
+  color:#e7f8ff !important;
+}
+.theme-dark .settings-panel .follow-btn.is-following{
+  background:rgba(159,122,234,.28) !important;
+  border-color:rgba(167,139,250,.62) !important;
+  color:#f2eaff !important;
+}
+.theme-dark .settings-panel .follow-btn:disabled{
+  opacity:.78;
+  color:#c8d6fb !important;
+  border-color:rgba(162,178,224,.44) !important;
 }
 .search-panel .discover-list{width:100%;max-width:100%;box-sizing:border-box;}
 
