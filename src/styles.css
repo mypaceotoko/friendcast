@@ -293,7 +293,7 @@ button { cursor: pointer; }
 .profile-screen{padding-bottom:calc(150px + env(safe-area-inset-bottom));}
 .compose-screen{padding-bottom:calc(96px + env(safe-area-inset-bottom));}
 .global-fab{right:max(12px, calc((100vw - 480px) / 2 + 12px));bottom:calc(136px + env(safe-area-inset-bottom));width:52px;height:52px;font-size:21px;}
-main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
+main.screen{padding-bottom:calc(108px + env(safe-area-inset-bottom));}
 @media (max-width:390px){.tweet-item{padding:14px 14px 12px;grid-template-columns:44px minmax(0,1fr);} .tweet-avatar{width:40px;height:40px;} .tweet-header-row{grid-template-columns:minmax(0,1fr) auto;}.tweet-header-actions{flex-direction:column;align-items:flex-end;}.visibility-badge{max-width:110px;}}
 
 
@@ -1155,6 +1155,7 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
   max-width:720px;
   margin-inline:auto;
   overflow-x:hidden;
+  padding-bottom:calc(102px + env(safe-area-inset-bottom));
 }
 .settings-panel{
   width:100%;
@@ -1162,6 +1163,7 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
   margin-inline:auto;
   box-sizing:border-box;
   overflow-x:hidden;
+  padding-bottom:0;
 }
 .settings-panel .settings-card,
 .settings-panel .friends-settings,
@@ -1181,6 +1183,31 @@ main.screen{padding-bottom:calc(170px + env(safe-area-inset-bottom));}
 }
 .settings-panel .invite-use-row > input{
   min-width:0;
+}
+.settings-panel > .settings-card:last-child{
+  padding-top:20px;
+  padding-bottom:20px;
+  min-height:0;
+}
+.settings-panel > .settings-card:last-child .logout-btn{
+  margin:0;
+}
+.compose-screen{
+  padding-bottom:calc(98px + env(safe-area-inset-bottom));
+  min-height:auto;
+}
+.compose-screen .compose-visibility-area{
+  padding-bottom:14px;
+}
+.compose-screen .compose-visibility-area:last-child{
+  margin-bottom:0;
+}
+.screen > .compose-screen:last-child,
+.screen > .settings-screen:last-child{
+  padding-bottom:calc(102px + env(safe-area-inset-bottom));
+}
+.screen > .settings-screen:last-child section:last-child{
+  padding-bottom:20px;
 }
 .theme-dark .search-panel{
   background:rgba(15,23,45,.9);
