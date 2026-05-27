@@ -1010,19 +1010,22 @@ const canViewPost = (post: Post, viewerId: string) => {
   if (post.visibility === 'specific') return post.user_id === viewerId || incomingCustomPostIds.has(post.id)
   return true
 }
+const isMutualFollow = (viewerId: string, targetUserId: string) => followingIds.has(targetUserId) && myFollowerIds.has(targetUserId) && viewerId !== targetUserId
+const canViewUserProfile = (viewerId: string, targetUserId: string) => viewerId === targetUserId || isMutualFollow(viewerId, targetUserId)
 const myPosts = useMemo(() => {
   if (!activeProfileId || !session?.user.id) return []
+  if (!canViewUserProfile(session.user.id, activeProfileId)) return []
   return posts.filter((post) => post.user_id === activeProfileId && canViewPost(post, session.user.id))
-}, [posts, activeProfileId, session?.user.id, incomingCloseFriendOwnerIds, incomingCustomPostIds])
+}, [posts, activeProfileId, session?.user.id, incomingCloseFriendOwnerIds, incomingCustomPostIds, followingIds, myFollowerIds])
 const homePosts = useMemo(() => {
   const myId = session?.user.id
   if (!myId) return []
   return posts.filter((post) => {
-    const visibleByOwnerOrFollow = post.user_id === myId || followingIds.has(post.user_id)
+    const visibleByOwnerOrFollow = post.user_id === myId || isMutualFollow(myId, post.user_id)
     if (!visibleByOwnerOrFollow) return false
     return canViewPost(post, myId)
   })
-}, [posts, followingIds, incomingCloseFriendOwnerIds, incomingCustomPostIds, session?.user.id])
+}, [posts, followingIds, myFollowerIds, incomingCloseFriendOwnerIds, incomingCustomPostIds, session?.user.id])
 const homeTimelineItems = useMemo(() => {
   const postItems: TimelineItem[] = homePosts.map((post) => ({ type: 'post', post, created_at: post.created_at }))
   return [...postItems, ...homeRepostItems].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
@@ -1311,6 +1314,16 @@ const renderAudioPlayer = (post: Post) => {
 
 const getAvatarInitial = (name: string) => name.slice(0, 1).toUpperCase()
 const goToProfile = (userId: string) => {
+  const viewerId = session?.user?.id ?? ''
+  if (!viewerId) return
+  if (!canViewUserProfile(viewerId, userId)) {
+    setViewingProfileId(userId)
+    setFollowActionError('このユーザーのプロフィールを見るには相互フォローが必要です。相互フォローになると、投稿やボイスを見ることができます。')
+    setScreen('profile')
+    window.requestAnimationFrame(() => safeScrollToTop())
+    return
+  }
+  setFollowActionError('')
   setViewingProfileId(userId)
   setScreen('profile')
   window.requestAnimationFrame(() => safeScrollToTop())
