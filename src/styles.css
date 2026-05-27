@@ -1585,3 +1585,52 @@ main.screen{padding-bottom:calc(108px + env(safe-area-inset-bottom));}
 .search-panel .friend-suggestions,.profile-tabs,.tweet-item,.audio-card,.voice-comment-player,.activity-card{width:100%;max-width:100%;box-sizing:border-box;min-width:0;}
 .search-panel .friend-suggestions *, .profile-tabs *, .tweet-item *, .voice-comment-player *, .activity-card *{min-width:0;}
 .search-panel .discover-user-meta strong,.search-panel .discover-user-meta small,.post-text,.activity-content,.voice-comment-wrap{overflow-wrap:anywhere;}
+
+/* compose header + close button foreground fix */
+.compose-screen{
+  overflow-x: clip;
+}
+.compose-topbar-compact{
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  gap:10px;
+  padding:0 16px 2px;
+}
+.compose-header-logo-button{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border:0;
+  background:transparent;
+  padding:0;
+  margin:0;
+  cursor:pointer;
+  line-height:0;
+}
+.compose-header-logo-button .home-brand-logo{
+  width:min(76vw, 280px);
+  max-width:100%;
+  height:auto;
+}
+.compose-close-button{
+  position:fixed;
+  top:max(16px, calc(env(safe-area-inset-top) + 8px));
+  right:max(12px, calc(env(safe-area-inset-right) + 12px));
+  bottom:auto;
+  z-index:1600;
+}
+@media (max-width: 430px){
+  .compose-topbar-compact{
+    padding-inline:12px;
+  }
+  .compose-header-logo-button .home-brand-logo{
+    width:min(72vw, 240px);
+  }
+  .compose-close-button{
+    top:max(12px, calc(env(safe-area-inset-top) + 6px));
+    right:max(10px, calc(env(safe-area-inset-right) + 10px));
+    width:50px;
+    height:50px;
+  }
+}
