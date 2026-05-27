@@ -136,14 +136,14 @@ button { cursor: pointer; }
 .home-logo-button:disabled { cursor: progress; opacity: .9; }
 .home-logo-button:focus-visible { outline: 2px solid rgba(103,75,181,.45); outline-offset: 3px; border-radius: 12px; }
 .home-brand-logo, .home-logo-banner-image { width: 100%; max-width: 100%; height: 100%; display: block; object-fit: contain; object-position: center 54%; }
-.home-avatar-button, .home-logo-avatar { position: absolute; left: 13.05%; top: 43.2%; transform: translate(-50%, -50%); width: clamp(40px, 9.2vw, 50px); height: clamp(40px, 9.2vw, 50px); aspect-ratio: 1 / 1; border-radius: 999px; border: 3px solid #d8cff0; background: linear-gradient(135deg,#e0bba8,#b8c9ff); box-shadow: 0 4px 10px rgba(78,72,117,.14); padding: 0; z-index: 3; overflow: hidden; }
+.home-avatar-button, .home-logo-avatar { position: absolute; left: 13.15%; top: 44.8%; transform: translate(-50%, -50%); width: clamp(46px, 10.4vw, 58px); height: clamp(46px, 10.4vw, 58px); aspect-ratio: 1 / 1; border-radius: 999px; border: 3px solid #d8cff0; background: linear-gradient(135deg,#e0bba8,#b8c9ff); box-shadow: 0 4px 10px rgba(78,72,117,.14); padding: 0; z-index: 3; overflow: hidden; }
 .home-avatar-button img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .home-avatar-button span { display:grid; place-items:center; width:100%; height:100%; font-size: 32px; color:#7458bc; font-weight:700; background:#f0eef7; }
 .home-avatar-button:focus-visible { outline: 2px solid rgba(103,75,181,.45); outline-offset: 3px; }
 .home-header-divider { margin-top: 0; border-bottom: 1px solid rgba(138,125,185,.18); background: #fff; }
 
 
-@media (max-width: 430px) { .home-mobile-header { padding: 6px 6px 0; } .home-brand-slot { height: clamp(114px, 34vw, 140px); } .home-avatar-button { left: 13.05%; top: 43.2%; width: clamp(38px, 9.5vw, 46px); height: clamp(38px, 9.5vw, 46px); border-width: 3px; } }
+@media (max-width: 430px) { .home-mobile-header { padding: 6px 6px 0; } .home-brand-slot { height: clamp(114px, 34vw, 140px); } .home-avatar-button { left: 13.15%; top: 44.8%; width: clamp(44px, 10.8vw, 54px); height: clamp(44px, 10.8vw, 54px); border-width: 3px; } }
 .screen-home { background: #fff; border-radius: 0; border: 0; padding: 0 0 calc(108px + env(safe-area-inset-bottom)); }
 .screen-home .timeline-list { border-top: 0; }
 .screen-home .timeline-list > .tweet-item:first-child { padding-top: 10px; }
