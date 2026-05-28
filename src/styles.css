@@ -212,8 +212,8 @@ button { cursor: pointer; }
 .profile-meta { display: flex; gap: 14px; flex-wrap: wrap; color: #4e4d62; font-size: 14px; margin-bottom: 10px; }
 .profile-follow-row { display: flex; gap: 18px; color: #24283d; font-size: 15px; margin-bottom: 12px; flex-wrap: nowrap; }
 .profile-follow-row strong { color: #10182f; }
-.profile-tabs { position: static; margin: 0; padding: 0 4px; display: flex; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; background: #f9f9ff; border-top: 1px solid rgba(122,117,131,.08); border-bottom: 1px solid rgba(122,117,131,.2); }
-.profile-tabs button { flex: 0 0 auto; border: 0; background: transparent !important; border-radius: 0; padding: 12px 12px 11px; min-height: 44px; color: #4a4759; font-size: 15px; font-weight: 600; position: relative; display:flex; align-items:center; justify-content:center; gap:4px; white-space:nowrap; }
+.profile-tabs { position: static; margin: 0; padding: 0 2px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); overflow: visible; background: #f9f9ff; border-top: 1px solid rgba(122,117,131,.08); border-bottom: 1px solid rgba(122,117,131,.2); }
+.profile-tabs button { min-width: 0; border: 0; background: transparent !important; border-radius: 0; padding: 10px 2px 9px; min-height: 42px; color: #4a4759; font-size: clamp(11px, 2.75vw, 14px); font-weight: 600; position: relative; display:flex; align-items:center; justify-content:center; gap:2px; white-space:nowrap; letter-spacing:-.01em; line-height:1.1; }
 
 .profile-tabs::-webkit-scrollbar { display: none; }
 .profile-tabs .active-tab { color: #0f1c36; }
@@ -1587,7 +1587,7 @@ main.screen{padding-bottom:calc(108px + env(safe-area-inset-bottom));}
 .post-sub-text.delivery-inline{margin-top:6px;}
 
 .profile-segment{display:flex;align-items:center;justify-content:center;gap:4px;min-width:0;}
-.profile-segment-count{font-variant-numeric:tabular-nums;font-size:12px;color:inherit;opacity:.9;}
+.profile-segment-count{font-variant-numeric:tabular-nums;font-size:11px;color:inherit;opacity:.9;line-height:1;}
 
 .voice-comment-player.audio-card{margin:0;padding:10px 12px;border-radius:18px;background:linear-gradient(180deg,#efeaff,#e3dbff)!important;border:1px solid rgba(103,75,181,.18);}
 .voice-comment-player .audio-play{width:38px;height:38px;min-width:38px;min-height:38px;font-size:18px;background:#6a4fbb;}
