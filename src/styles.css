@@ -212,8 +212,10 @@ button { cursor: pointer; }
 .profile-meta { display: flex; gap: 14px; flex-wrap: wrap; color: #4e4d62; font-size: 14px; margin-bottom: 10px; }
 .profile-follow-row { display: flex; gap: 18px; color: #24283d; font-size: 15px; margin-bottom: 12px; flex-wrap: nowrap; }
 .profile-follow-row strong { color: #10182f; }
-.profile-tabs { position: static; margin: 0; padding: 0 4px; background: #f9f9ff; border-top: 1px solid rgba(122,117,131,.08); border-bottom: 1px solid rgba(122,117,131,.2); }
-.profile-tabs button { border: 0; background: transparent !important; border-radius: 0; padding: 12px 8px 11px; color: #4a4759; font-size: 15px; font-weight: 600; position: relative; display:flex; align-items:center; justify-content:center; gap:4px; white-space:nowrap; }
+.profile-tabs { position: static; margin: 0; padding: 0 4px; display: flex; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; background: #f9f9ff; border-top: 1px solid rgba(122,117,131,.08); border-bottom: 1px solid rgba(122,117,131,.2); }
+.profile-tabs button { flex: 0 0 auto; border: 0; background: transparent !important; border-radius: 0; padding: 12px 12px 11px; min-height: 44px; color: #4a4759; font-size: 15px; font-weight: 600; position: relative; display:flex; align-items:center; justify-content:center; gap:4px; white-space:nowrap; }
+
+.profile-tabs::-webkit-scrollbar { display: none; }
 .profile-tabs .active-tab { color: #0f1c36; }
 .profile-tabs .active-tab::after { content:''; position:absolute; left: 50%; transform: translateX(-50%); bottom: 0; width: 60px; height: 5px; border-radius: 999px 999px 0 0; background:#6a4cc7; }
 .profile-pinned { background: #efeff6; border-top: 1px solid #d9dcf0; border-bottom: 1px solid #d9dcf0; padding: 16px 24px 14px; }
