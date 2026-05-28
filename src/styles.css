@@ -167,11 +167,7 @@ button { cursor: pointer; }
 .icon-btn span { font-size: 17px; }
 .like-btn { min-width: 44px; min-height: 44px; justify-content: center; touch-action: manipulation; }
 .like-btn.liked { color: #e04a90; opacity: 1; }
-.repost-btn { min-width: 44px; min-height: 44px; justify-content: center; touch-action: manipulation; }
-.repost-btn.reposted { color: #3a9f7d; opacity: 1; }
 .like-btn:disabled { opacity: .55; }
-.share-icon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.share-icon circle { fill: currentColor; stroke: none; }
 .global-fab { position: fixed; right: max(16px, calc((100vw - 480px) / 2 + 18px)); bottom: calc(96px + env(safe-area-inset-bottom)); width: 56px; height: 56px; border-radius: 999px; border: 0; font-size: 23px; background: #674bb5; color: #fff; box-shadow: 0 10px 24px rgba(103,75,181,.32); z-index: 75; }
 .bottom-nav { position: fixed; bottom: 0; left: 0; transform: none; width: 100%; border-radius: 0; border-left: 0; border-right: 0; border-bottom:0; padding: 10px 10px calc(10px + env(safe-area-inset-bottom)); background: rgba(249,249,255,.94); grid-template-columns: repeat(5, 1fr); opacity: 1; pointer-events: auto; }
 .bottom-nav button { border:0; background: transparent !important; color:#424154; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; min-height: 52px; padding: 6px 4px; }
@@ -901,7 +897,8 @@ main.screen{padding-bottom:calc(108px + env(safe-area-inset-bottom));}
 .screen-home .post-actions{
   display:flex;
   align-items:center;
-  gap:24px;
+  justify-content:flex-start;
+  gap:14px;
   margin-top:16px;
 }
 .screen-home .post-user-name,
@@ -1015,7 +1012,7 @@ main.screen{padding-bottom:calc(108px + env(safe-area-inset-bottom));}
   flex-direction:row;
   align-items:center;
   justify-content:flex-start;
-  gap:24px;
+  gap:14px;
   margin-top:14px;
   flex-wrap:nowrap;
 }
