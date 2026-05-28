@@ -1709,3 +1709,11 @@ main.screen{padding-bottom:calc(108px + env(safe-area-inset-bottom));}
     bottom: calc(130px + env(safe-area-inset-bottom));
   }
 }
+
+.visibility-badge-button{border:none;cursor:pointer;}
+.visibility-editor-overlay{position:fixed;inset:0;background:rgba(28,23,44,.42);display:grid;place-items:center;z-index:80;padding:20px;}
+.visibility-editor-panel{width:min(420px,100%);background:linear-gradient(180deg,#faf7ff,#f3eefc);border:1px solid #d6c8f0;border-radius:18px;padding:16px;box-shadow:0 12px 36px rgba(51,34,92,.25);}
+.visibility-editor-panel h3{margin:0 0 12px;color:#4c3f78;}
+.visibility-editor-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:14px;}
+.theme-dark .visibility-editor-panel{background:linear-gradient(180deg,#24263c,#1c2033);border-color:#4e4f78;}
+.theme-dark .visibility-editor-panel h3{color:#e0defa;}
