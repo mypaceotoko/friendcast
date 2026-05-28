@@ -1369,6 +1369,9 @@ main.screen{padding-bottom:calc(108px + env(safe-area-inset-bottom));}
 .friend-suggestions-empty{
   margin-top: 10px;
 }
+.friend-suggestions-header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:2px;}
+.friend-suggestions-header h3{margin:0;}
+.friend-suggestions-toggle{min-height:28px;padding:3px 10px;font-size:12px;}
 
 /* v0.7.2 tighten post body spacing under date */
 .screen-home .post-header,
