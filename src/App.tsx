@@ -1556,17 +1556,24 @@ const togglePostLike = async (postId: string) => {
 const isPostBookmarked = (postId: string) => bookmarkedPostIds.has(postId)
 const toggleBookmarkPost = async (postId: string | null | undefined) => {
   const userId = session?.user.id
+  const wasBookmarked = !!postId && isPostBookmarked(postId)
+  const action = wasBookmarked ? 'delete' : 'insert'
+  const payload = !wasBookmarked && userId && postId ? { user_id: userId, post_id: postId } : null
+  const deleteFilter = { user_id: userId ?? null, post_id: postId ?? null }
+
   if (!sb || !userId || !postId) {
     console.error('bookmark update failed: invalid context', {
+      action,
       userId,
       postId,
-      wasBookmarked: false
+      wasBookmarked,
+      payload,
+      deleteFilter
     })
-    if (postId) setPostActionError((prev) => ({ ...prev, [postId]: 'あとで聴くの更新に失敗しました。' }))
+    if (postId) setPostActionError((prev) => ({ ...prev, [postId]: 'あとで聴くの更新に失敗しました: invalid context' }))
     return
   }
 
-  const wasBookmarked = isPostBookmarked(postId)
   setPostActionError((prev) => ({ ...prev, [postId]: '' }))
 
   try {
@@ -1575,13 +1582,15 @@ const toggleBookmarkPost = async (postId: string | null | undefined) => {
       if (error) throw error
       setBookmarkedPostIds((prev) => { const next = new Set(prev); next.delete(postId); return next })
     } else {
-      const payload = { user_id: userId, post_id: postId }
-      const { error } = await sb.from('post_bookmarks').insert(payload)
+      const bookmarkPayload = { user_id: userId, post_id: postId }
+      console.log('bookmark insert payload', bookmarkPayload)
+      const { error } = await sb.from('post_bookmarks').upsert(bookmarkPayload, { onConflict: 'user_id,post_id' })
       if (error) throw error
       setBookmarkedPostIds((prev) => new Set(prev).add(postId))
     }
   } catch (error: any) {
     console.error('bookmark update failed', {
+      action,
       error,
       message: error?.message,
       code: error?.code,
@@ -1589,9 +1598,13 @@ const toggleBookmarkPost = async (postId: string | null | undefined) => {
       hint: error?.hint,
       userId,
       postId,
-      wasBookmarked
+      wasBookmarked,
+      payload,
+      deleteFilter
     })
-    setPostActionError((prev) => ({ ...prev, [postId]: 'あとで聴くの更新に失敗しました。' }))
+    const errorCode = typeof error?.code === 'string' && error.code ? ` ${error.code}` : ''
+    const errorMessage = typeof error?.message === 'string' && error.message ? ` ${error.message}` : ''
+    setPostActionError((prev) => ({ ...prev, [postId]: `あとで聴くの更新に失敗しました:${errorCode}${errorMessage}`.trim() }))
   }
 }
 
