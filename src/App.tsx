@@ -623,7 +623,14 @@ const loadRepostsForPosts = async (postIds: string[], userId: string) => {
 const loadBookmarkedPostIds = async (userId: string) => {
   const { data, error } = await sb!.from('post_bookmarks').select('post_id').eq('user_id', userId)
   if (error) {
-    console.error('bookmarks fetch failed', error)
+    console.error('bookmarks fetch failed', {
+      error,
+      message: error?.message,
+      code: error?.code,
+      details: error?.details,
+      hint: error?.hint,
+      userId
+    })
     return
   }
   setBookmarkedPostIds(new Set((data ?? []).map((row) => row.post_id).filter(Boolean)))
@@ -1547,33 +1554,42 @@ const togglePostLike = async (postId: string) => {
 }
 
 const isPostBookmarked = (postId: string) => bookmarkedPostIds.has(postId)
-const toggleBookmarkPost = async (postId: string) => {
+const toggleBookmarkPost = async (postId: string | null | undefined) => {
   const userId = session?.user.id
-  if (!userId) return
+  if (!sb || !userId || !postId) {
+    console.error('bookmark update failed: invalid context', {
+      userId,
+      postId,
+      wasBookmarked: false
+    })
+    if (postId) setPostActionError((prev) => ({ ...prev, [postId]: 'あとで聴くの更新に失敗しました。' }))
+    return
+  }
+
   const wasBookmarked = isPostBookmarked(postId)
   setPostActionError((prev) => ({ ...prev, [postId]: '' }))
-  setBookmarkedPostIds((prev) => {
-    const next = new Set(prev)
-    if (wasBookmarked) next.delete(postId)
-    else next.add(postId)
-    return next
-  })
 
   try {
     if (wasBookmarked) {
-      const { error } = await sb!.from('post_bookmarks').delete().eq('post_id', postId).eq('user_id', userId)
+      const { error } = await sb.from('post_bookmarks').delete().eq('user_id', userId).eq('post_id', postId)
       if (error) throw error
+      setBookmarkedPostIds((prev) => { const next = new Set(prev); next.delete(postId); return next })
     } else {
-      const { error } = await sb!.from('post_bookmarks').insert({ post_id: postId, user_id: userId })
+      const payload = { user_id: userId, post_id: postId }
+      const { error } = await sb.from('post_bookmarks').insert(payload)
       if (error) throw error
+      setBookmarkedPostIds((prev) => new Set(prev).add(postId))
     }
-  } catch (error) {
-    console.error('toggle bookmark failed', { error, postId, userId, wasBookmarked })
-    setBookmarkedPostIds((prev) => {
-      const next = new Set(prev)
-      if (wasBookmarked) next.add(postId)
-      else next.delete(postId)
-      return next
+  } catch (error: any) {
+    console.error('bookmark update failed', {
+      error,
+      message: error?.message,
+      code: error?.code,
+      details: error?.details,
+      hint: error?.hint,
+      userId,
+      postId,
+      wasBookmarked
     })
     setPostActionError((prev) => ({ ...prev, [postId]: 'あとで聴くの更新に失敗しました。' }))
   }
