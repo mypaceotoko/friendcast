@@ -86,15 +86,15 @@ const AUDIO_EXTENSION_BY_MIME_TYPE: Record<string, UploadAudioExtension> = {
   'audio/mpeg': 'mp3',
   'audio/mp3': 'mp3',
   'audio/mp4': 'm4a',
+  'audio/x-m4a': 'm4a',
   'audio/m4a': 'm4a',
   'audio/webm': 'webm',
   'audio/wav': 'wav',
   'audio/x-wav': 'wav',
-  'audio/aac': 'aac',
-  'audio/x-aac': 'aac'
+  'audio/aac': 'aac'
 }
 const ALLOWED_AUDIO_MIME_TYPES = Object.keys(AUDIO_EXTENSION_BY_MIME_TYPE)
-const UPLOAD_AUDIO_ACCEPT = ALLOWED_AUDIO_EXTENSIONS.map((extension) => `.${extension}`).join(',')
+const UPLOAD_AUDIO_ACCEPT = '.m4a,.mp3,.webm,.wav,.aac,audio/*'
 const VOICE_POSTS_BUCKET = 'voice-posts'
 const MAX_VOICE_REPLY_SECONDS = 600
 const MAX_VOICE_REPLY_MS = MAX_VOICE_REPLY_SECONDS * 1000
@@ -133,9 +133,35 @@ const inferUploadAudioMimeType = (extension: UploadAudioExtension, mimeType: str
   return normalized && AUDIO_EXTENSION_BY_MIME_TYPE[normalized] ? normalized : AUDIO_MIME_TYPE_BY_EXTENSION[extension]
 }
 
-const isAllowedUploadAudioMimeType = (mimeType: string) => {
-  const normalized = getNormalizedAudioMimeType(mimeType)
-  return !normalized || ALLOWED_AUDIO_MIME_TYPES.includes(normalized)
+const isSupportedAudioFile = (file: File) => {
+  const fileName = file.name.toLowerCase()
+  const extension = fileName.split('.').pop()
+  const mimeType = getNormalizedAudioMimeType(file.type)
+
+  const extensionAllowed = ALLOWED_AUDIO_EXTENSIONS.includes(extension as UploadAudioExtension)
+  const mimeAllowed = ALLOWED_AUDIO_MIME_TYPES.includes(mimeType)
+
+  // iPhone Voice Memos の .m4a が video/mp4 として来るケースを救済
+  const iPhoneM4aFallback = extension === 'm4a' && mimeType === 'video/mp4'
+
+  return extensionAllowed && (mimeAllowed || iPhoneM4aFallback || mimeType === '')
+}
+
+const getUnsupportedAudioFileMessage = (file: File) => {
+  const fileName = file.name.toLowerCase()
+  const extension = fileName.split('.').pop() ?? ''
+  const mimeType = getNormalizedAudioMimeType(file.type)
+  const extensionAllowed = ALLOWED_AUDIO_EXTENSIONS.includes(extension as UploadAudioExtension)
+  const mimeAllowed = ALLOWED_AUDIO_MIME_TYPES.includes(mimeType)
+  const iPhoneM4aFallback = extension === 'm4a' && mimeType === 'video/mp4'
+
+  if (!extensionAllowed) {
+    return `この拡張子の音声ファイルは対応していません（拡張子: ${extension || 'なし'}、対応: .m4a / .mp3 / .webm / .wav / .aac）。`
+  }
+  if (!mimeAllowed && !iPhoneM4aFallback && mimeType !== '') {
+    return `このMIME typeの音声ファイルは対応していません（MIME type: ${mimeType}）。`
+  }
+  return 'この形式の音声ファイルは対応していません（拡張子またはMIME typeを確認してください）。'
 }
 
 const getSafeAudioExtension = (file: File | Blob, fallbackExtension?: string | null): UploadAudioExtension => {
@@ -885,14 +911,14 @@ const handleUploadAudioChange = async (event: ChangeEvent<HTMLInputElement>) => 
   if (!file) return
   const extension = getUploadAudioExtension(file.name)
   const inferredMimeType = extension ? inferUploadAudioMimeType(extension, file.type) : ''
-  if (!extension || !isAllowedUploadAudioMimeType(file.type)) {
+  if (!isSupportedAudioFile(file) || !extension) {
     clearUploadedAudio()
-    setUploadAudioError('この形式の音声ファイルは対応していません')
+    setUploadAudioError(getUnsupportedAudioFileMessage(file))
     return
   }
   if (file.size > MAX_UPLOAD_AUDIO_SIZE_BYTES) {
     clearUploadedAudio()
-    setUploadAudioError('ファイルサイズが大きすぎます。30MB以下の音声ファイルを選んでください')
+    setUploadAudioError(`ファイルサイズが30MBを超えています（サイズ: ${formatFileSize(file.size)}、上限: 30MB）。30MB以下の音声ファイルを選んでください。`)
     return
   }
   const previewUrl = URL.createObjectURL(file)
@@ -902,7 +928,7 @@ const handleUploadAudioChange = async (event: ChangeEvent<HTMLInputElement>) => 
     if (durationSeconds > MAX_UPLOAD_AUDIO_DURATION_SECONDS) {
       URL.revokeObjectURL(previewUrl)
       clearUploadedAudio()
-      setUploadAudioError('10分を超える音声は投稿できません')
+      setUploadAudioError(`再生時間が10分を超えています（再生時間: ${formatDurationSeconds(durationSeconds)}、上限: 10:00）。10分以下の音声ファイルを選んでください。`)
       return
     }
     clearRecordedAudio()
@@ -914,7 +940,7 @@ const handleUploadAudioChange = async (event: ChangeEvent<HTMLInputElement>) => 
     console.error('upload audio duration check failed', error)
     URL.revokeObjectURL(previewUrl)
     clearUploadedAudio()
-    setUploadAudioError('音声の長さを確認できませんでした。別の音声ファイルを選んでください')
+    setUploadAudioError('再生時間を確認できませんでした。10分以内の音声ファイルか確認し、別の音声ファイルを選んでください。')
   } finally {
     setIsValidatingUploadAudio(false)
   }
