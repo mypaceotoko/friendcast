@@ -166,6 +166,18 @@ const URL_MATCH_PATTERN = /(?:https?:\/\/|www\.)[^\s<>"']+/gi
 const TRAILING_URL_PUNCTUATION_PATTERN = /[.,!?;:、。！？)\]\}]+$/
 
 type SafeLink = { displayUrl: string; href: string; url: URL }
+type LinkPreviewData = { url: string; domain: string; title: string; description: string; image: string | null; siteName: string }
+type LinkPreviewCacheEntry = { status: 'success'; data: LinkPreviewData } | { status: 'error' }
+
+const linkPreviewCache = new Map<string, LinkPreviewCacheEntry>()
+const pendingLinkPreviewRequests = new Map<string, Promise<LinkPreviewData>>()
+
+const getLinkDomain = (safeLink: SafeLink) => safeLink.url.hostname.replace(/^www\./, '')
+
+const getDisplayUrl = (value: string, maxLength = 96) => {
+  if (value.length <= maxLength) return value
+  return `${value.slice(0, Math.max(0, maxLength - 1))}…`
+}
 
 const getSafeLink = (rawUrl: string): SafeLink | null => {
   const displayUrl = rawUrl.trim()
@@ -231,7 +243,7 @@ const extractFirstUrl = (text: string): SafeLink | null => {
 const getLinkPreviewTitle = (safeLink: SafeLink) => {
   const pathParts = safeLink.url.pathname.split('/').filter(Boolean)
   const lastPathPart = pathParts[pathParts.length - 1]
-  if (!lastPathPart) return safeLink.url.hostname.replace(/^www\./, '')
+  if (!lastPathPart) return getLinkDomain(safeLink)
   try {
     return decodeURIComponent(lastPathPart).replace(/[-_]+/g, ' ')
   } catch {
@@ -239,22 +251,131 @@ const getLinkPreviewTitle = (safeLink: SafeLink) => {
   }
 }
 
+const buildFallbackLinkPreview = (link: SafeLink): LinkPreviewData => {
+  const domain = getLinkDomain(link)
+  return {
+    url: link.href,
+    domain,
+    title: getLinkPreviewTitle(link),
+    description: '',
+    image: null,
+    siteName: domain
+  }
+}
+
+const fetchLinkPreview = async (link: SafeLink) => {
+  const cacheKey = link.href
+  const cached = linkPreviewCache.get(cacheKey)
+  if (cached?.status === 'success') return cached.data
+  if (cached?.status === 'error') throw new Error('Link preview fetch previously failed')
+
+  const pending = pendingLinkPreviewRequests.get(cacheKey)
+  if (pending) return pending
+
+  if (!supabase) throw new Error('Supabase client is not configured')
+
+  const request = supabase.functions.invoke<LinkPreviewData>('fetch-link-preview', {
+    body: { url: link.href }
+  }).then(({ data, error }) => {
+    if (error) throw error
+    if (!data) throw new Error('Link preview response was empty')
+    const preview: LinkPreviewData = {
+      url: data.url || link.href,
+      domain: data.domain || getLinkDomain(link),
+      title: data.title || getLinkDomain(link),
+      description: data.description || '',
+      image: data.image || null,
+      siteName: data.siteName || data.domain || getLinkDomain(link)
+    }
+    linkPreviewCache.set(cacheKey, { status: 'success', data: preview })
+    return preview
+  }).catch((error) => {
+    linkPreviewCache.set(cacheKey, { status: 'error' })
+    throw error
+  }).finally(() => {
+    pendingLinkPreviewRequests.delete(cacheKey)
+  })
+
+  pendingLinkPreviewRequests.set(cacheKey, request)
+  return request
+}
+
 const LinkPreviewCard = ({ link }: { link: SafeLink }) => {
-  const domain = link.url.hostname.replace(/^www\./, '')
+  const [preview, setPreview] = useState<LinkPreviewData>(() => {
+    const cached = linkPreviewCache.get(link.href)
+    return cached?.status === 'success' ? cached.data : buildFallbackLinkPreview(link)
+  })
+  const [isLoading, setIsLoading] = useState(() => !linkPreviewCache.has(link.href) && Boolean(supabase))
+  const [isFallback, setIsFallback] = useState(() => linkPreviewCache.get(link.href)?.status !== 'success')
+
+  useEffect(() => {
+    let isMounted = true
+    const cached = linkPreviewCache.get(link.href)
+    if (cached?.status === 'success') {
+      setPreview(cached.data)
+      setIsFallback(false)
+      setIsLoading(false)
+      return
+    }
+
+    const fallback = buildFallbackLinkPreview(link)
+    setPreview(fallback)
+    setIsFallback(true)
+
+    if (cached?.status === 'error') {
+      setIsLoading(false)
+      return
+    }
+
+    if (!supabase) {
+      setIsLoading(false)
+      return
+    }
+
+    setIsLoading(true)
+    fetchLinkPreview(link).then((data) => {
+      if (!isMounted) return
+      setPreview(data)
+      setIsFallback(false)
+    }).catch((error) => {
+      console.warn('Failed to fetch link preview', { url: link.href, error })
+      if (!isMounted) return
+      setPreview(fallback)
+      setIsFallback(true)
+    }).finally(() => {
+      if (isMounted) setIsLoading(false)
+    })
+
+    return () => { isMounted = false }
+  }, [link.href])
+
+  const displayDomain = preview.siteName || preview.domain || getLinkDomain(link)
+  const displayUrl = getDisplayUrl(preview.url || link.displayUrl)
+  const title = preview.title || getLinkPreviewTitle(link)
+  const description = preview.description.trim()
+
   return (
     <a
-      className="link-preview-card"
+      className={`link-preview-card ${preview.image ? 'has-image' : 'no-image'} ${isFallback ? 'is-fallback' : 'is-rich'}`}
       href={link.href}
       target="_blank"
       rel="noopener noreferrer"
       aria-label={`リンクプレビューを新しいタブで開く: ${link.displayUrl}`}
       onClick={(event) => event.stopPropagation()}
     >
-      <span className="link-preview-icon" aria-hidden="true">🔗</span>
+      {preview.image ? (
+        <span className="link-preview-image-wrap" aria-hidden="true">
+          <img className="link-preview-image" src={preview.image} alt="" loading="lazy" referrerPolicy="no-referrer" />
+        </span>
+      ) : (
+        <span className="link-preview-icon" aria-hidden="true">🔗</span>
+      )}
       <span className="link-preview-content">
-        <span className="link-preview-domain">{domain}</span>
-        <strong className="link-preview-title">{getLinkPreviewTitle(link)}</strong>
-        <span className="link-preview-url">{link.displayUrl}</span>
+        <span className="link-preview-domain">{displayDomain}</span>
+        <strong className="link-preview-title">{title}</strong>
+        {description && <span className="link-preview-description">{description}</span>}
+        <span className="link-preview-url">{displayUrl}</span>
+        {isLoading && <span className="link-preview-loading">プレビューを取得中...</span>}
       </span>
     </a>
   )
