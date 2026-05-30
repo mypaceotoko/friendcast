@@ -2342,7 +2342,8 @@ body[data-theme="dark"] .voice-comment-player .audio-speed-btn{
   border-radius: 16px;
 }
 .compose-screen .record-audio-option{
-  padding-top: 6px;
+  padding-top: 16px;
+  padding-bottom: 0;
 }
 .compose-screen .record-waveform{
   height: 48px;
