@@ -1734,3 +1734,114 @@ main.screen{padding-bottom:calc(108px + env(safe-area-inset-bottom));}
 .visibility-editor-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:14px;}
 .theme-dark .visibility-editor-panel{background:linear-gradient(180deg,#24263c,#1c2033);border-color:#4e4f78;}
 .theme-dark .visibility-editor-panel h3{color:#e0defa;}
+
+/* v0.7.4 dark theme persistence visibility polish */
+:root[data-theme="dark"],
+body[data-theme="dark"]{
+  color-scheme:dark;
+  background:#060d1f;
+}
+
+.theme-dark .bottom-nav{
+  background:rgba(15, 23, 42, .94) !important;
+  border-top:1px solid rgba(148, 163, 184, .22) !important;
+  box-shadow:0 -12px 30px rgba(0, 0, 0, .28);
+  backdrop-filter:blur(16px);
+}
+.theme-dark .bottom-nav button{
+  color:#cbd5e1 !important;
+  opacity:1;
+  text-shadow:0 1px 1px rgba(0, 0, 0, .24);
+}
+.theme-dark .bottom-nav button span,
+.theme-dark .bottom-nav button small{
+  color:inherit;
+  opacity:1;
+}
+.theme-dark .bottom-nav .nav-active{
+  background:linear-gradient(145deg, rgba(167, 139, 250, .92), rgba(196, 181, 253, .86)) !important;
+  color:#ffffff !important;
+  box-shadow:0 8px 20px rgba(124, 58, 237, .36), inset 0 0 0 1px rgba(255, 255, 255, .16);
+}
+
+.theme-dark .bookmark-btn{
+  color:#cbd5e1 !important;
+  opacity:1;
+}
+.theme-dark .bookmark-btn .bookmark-icon{
+  color:inherit;
+  filter:drop-shadow(0 1px 2px rgba(0, 0, 0, .35));
+}
+.theme-dark .bookmark-btn.active-icon,
+.theme-dark .bookmark-btn[aria-pressed="true"]{
+  color:#c4b5fd !important;
+}
+.theme-dark .bookmark-btn.active-icon .bookmark-icon,
+.theme-dark .bookmark-btn[aria-pressed="true"] .bookmark-icon{
+  filter:drop-shadow(0 0 6px rgba(196, 181, 253, .52));
+}
+
+.theme-dark .post-card,
+.theme-dark .tweet-item{
+  background:rgba(15, 23, 42, .82);
+  border:1px solid rgba(148, 163, 184, .18);
+  box-shadow:0 10px 28px rgba(0, 0, 0, .18);
+}
+.theme-dark .screen-home .post-card,
+.theme-dark .profile-screen .post-card{
+  padding:16px;
+}
+.theme-dark .post-user-name,
+.theme-dark .author-primary strong,
+.theme-dark .tweet-header strong,
+.theme-dark .post-text,
+.theme-dark .tweet-text{
+  color:#f8fafc !important;
+}
+.theme-dark .post-date,
+.theme-dark .author-handle,
+.theme-dark .author-time,
+.theme-dark .post-sub-text,
+.theme-dark .delivery-inline,
+.theme-dark .post-meta,
+.theme-dark .post-actions .icon-btn,
+.theme-dark .comment-btn,
+.theme-dark .like-btn{
+  color:#cbd5e1 !important;
+  opacity:1;
+}
+.theme-dark .visibility-badge,
+.theme-dark .visibility-badge-button{
+  background:rgba(167, 139, 250, .16) !important;
+  border-color:rgba(196, 181, 253, .36) !important;
+  color:#ddd6fe !important;
+}
+.theme-dark .post-delete-btn,
+.theme-dark .post-delete-button,
+.theme-dark .comment-delete-btn{
+  background:rgba(127, 29, 29, .34) !important;
+  border-color:rgba(248, 113, 113, .42) !important;
+  color:#fecaca !important;
+}
+.theme-dark .like-btn.liked,
+.theme-dark .like-btn.active-icon{
+  color:#f9a8d4 !important;
+}
+
+.theme-dark .settings-panel .tabs{
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+}
+.theme-dark .settings-panel .tabs .active-tab{
+  background:linear-gradient(145deg, rgba(109, 40, 217, .86), rgba(124, 58, 237, .82)) !important;
+  color:#ffffff !important;
+  border-color:#c4b5fd !important;
+  box-shadow:0 0 0 1px rgba(196, 181, 253, .48), 0 8px 20px rgba(76, 29, 149, .32);
+}
+.settings-panel .tabs{
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+}
+.settings-panel .tabs .active-tab{
+  background:rgba(103, 75, 181, .16) !important;
+  color:#3d2f70;
+  box-shadow:0 0 0 1px rgba(103, 75, 181, .28);
+}
