@@ -75,7 +75,25 @@ const MAX_UPLOAD_AUDIO_SIZE_BYTES = 30 * 1024 * 1024
 const MAX_UPLOAD_AUDIO_DURATION_SECONDS = 10 * 60
 const ALLOWED_AUDIO_EXTENSIONS = ['m4a', 'mp3', 'webm', 'wav', 'aac'] as const
 type UploadAudioExtension = typeof ALLOWED_AUDIO_EXTENSIONS[number]
-const ALLOWED_AUDIO_MIME_TYPES = ['audio/m4a', 'audio/mp4', 'audio/mpeg', 'audio/mp3', 'audio/webm', 'audio/wav', 'audio/x-wav', 'audio/aac', 'audio/x-aac'] as const
+const AUDIO_MIME_TYPE_BY_EXTENSION: Record<UploadAudioExtension, string> = {
+  mp3: 'audio/mpeg',
+  m4a: 'audio/mp4',
+  webm: 'audio/webm',
+  wav: 'audio/wav',
+  aac: 'audio/aac'
+}
+const AUDIO_EXTENSION_BY_MIME_TYPE: Record<string, UploadAudioExtension> = {
+  'audio/mpeg': 'mp3',
+  'audio/mp3': 'mp3',
+  'audio/mp4': 'm4a',
+  'audio/m4a': 'm4a',
+  'audio/webm': 'webm',
+  'audio/wav': 'wav',
+  'audio/x-wav': 'wav',
+  'audio/aac': 'aac',
+  'audio/x-aac': 'aac'
+}
+const ALLOWED_AUDIO_MIME_TYPES = Object.keys(AUDIO_EXTENSION_BY_MIME_TYPE)
 const UPLOAD_AUDIO_ACCEPT = ALLOWED_AUDIO_EXTENSIONS.map((extension) => `.${extension}`).join(',')
 const VOICE_POSTS_BUCKET = 'voice-posts'
 const MAX_VOICE_REPLY_SECONDS = 600
@@ -98,14 +116,37 @@ const formatFileSize = (bytes: number) => {
   return `${(bytes / 1024 / 1024).toFixed(bytes >= 10 * 1024 * 1024 ? 1 : 2)}MB`
 }
 
+const getNormalizedAudioMimeType = (mimeType: string | null | undefined) => mimeType?.split(';')[0]?.trim().toLowerCase() ?? ''
+
 const getUploadAudioExtension = (filename: string): UploadAudioExtension | null => {
   const extension = filename.split('.').pop()?.trim().toLowerCase()
   return extension && ALLOWED_AUDIO_EXTENSIONS.includes(extension as UploadAudioExtension) ? extension as UploadAudioExtension : null
 }
 
+const getUploadAudioExtensionFromMimeType = (mimeType: string | null | undefined): UploadAudioExtension | null => {
+  const normalized = getNormalizedAudioMimeType(mimeType)
+  return normalized ? AUDIO_EXTENSION_BY_MIME_TYPE[normalized] ?? null : null
+}
+
+const inferUploadAudioMimeType = (extension: UploadAudioExtension, mimeType: string | null | undefined) => {
+  const normalized = getNormalizedAudioMimeType(mimeType)
+  return normalized && AUDIO_EXTENSION_BY_MIME_TYPE[normalized] ? normalized : AUDIO_MIME_TYPE_BY_EXTENSION[extension]
+}
+
 const isAllowedUploadAudioMimeType = (mimeType: string) => {
-  const normalized = mimeType.split(';')[0]?.trim().toLowerCase()
-  return !normalized || ALLOWED_AUDIO_MIME_TYPES.includes(normalized as typeof ALLOWED_AUDIO_MIME_TYPES[number])
+  const normalized = getNormalizedAudioMimeType(mimeType)
+  return !normalized || ALLOWED_AUDIO_MIME_TYPES.includes(normalized)
+}
+
+const getSafeAudioExtension = (file: File | Blob, fallbackExtension?: string | null): UploadAudioExtension => {
+  const mimeExtension = getUploadAudioExtensionFromMimeType(file.type)
+  if (mimeExtension) return mimeExtension
+  if (typeof File !== 'undefined' && file instanceof File) {
+    const fileExtension = getUploadAudioExtension(file.name)
+    if (fileExtension) return fileExtension
+  }
+  if (fallbackExtension && ALLOWED_AUDIO_EXTENSIONS.includes(fallbackExtension as UploadAudioExtension)) return fallbackExtension as UploadAudioExtension
+  return 'webm'
 }
 
 const getUploadAudioMetadata = (previewUrl: string) => new Promise<number>((resolve, reject) => {
@@ -130,7 +171,73 @@ const getUploadAudioMetadata = (previewUrl: string) => new Promise<number>((reso
 
 const createUploadAudioStoragePath = (userId: string, extension: UploadAudioExtension) => {
   const random = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2)
-  return `voice-uploads/${userId}/${Date.now()}-${random}.${extension}`
+  return `${userId}/${Date.now()}-${random}.${extension}`
+}
+
+type AudioPostUploadSource = 'recording' | 'file'
+type AudioPostUploadPayload = {
+  blob: Blob
+  durationMs: number
+  mimeType: string
+  size: number
+  extension: UploadAudioExtension
+  source: AudioPostUploadSource
+  originalFileName?: string
+  originalFileType?: string
+}
+
+type SupabaseErrorLike = {
+  message?: string
+  name?: string
+  statusCode?: string | number
+  status?: string | number
+  code?: string | number
+  details?: string
+  hint?: string
+}
+
+const getSupabaseErrorDetails = (error: unknown) => {
+  const errorLike = (error ?? {}) as SupabaseErrorLike
+  return {
+    message: errorLike.message,
+    name: errorLike.name,
+    statusCode: errorLike.statusCode,
+    status: errorLike.status,
+    code: errorLike.code,
+    details: errorLike.details,
+    hint: errorLike.hint,
+    error
+  }
+}
+
+const getUploadFailureStatusLabel = (error: unknown) => {
+  const errorLike = (error ?? {}) as SupabaseErrorLike
+  return errorLike.statusCode ?? errorLike.status ?? errorLike.code ?? errorLike.message ?? 'unknown'
+}
+
+const createAudioPostUploadPayload = (recordedBlob: Blob | null, recordedDurationMs: number, uploadedAudio: UploadedAudioSelection | null): AudioPostUploadPayload | null => {
+  if (recordedBlob) {
+    const extension = getSafeAudioExtension(recordedBlob)
+    return {
+      blob: recordedBlob,
+      durationMs: recordedDurationMs,
+      mimeType: inferUploadAudioMimeType(extension, recordedBlob.type),
+      size: recordedBlob.size,
+      extension,
+      source: 'recording'
+    }
+  }
+  if (!uploadedAudio) return null
+  return {
+    blob: uploadedAudio.file,
+    durationMs: Math.round(uploadedAudio.durationSeconds * 1000),
+    mimeType: inferUploadAudioMimeType(uploadedAudio.extension, uploadedAudio.file.type || uploadedAudio.mimeType),
+    size: uploadedAudio.file.size,
+    extension: uploadedAudio.extension,
+    source: 'file',
+    originalFileName: uploadedAudio.file.name,
+    originalFileType: uploadedAudio.file.type
+  }
 }
 
 const safeScrollToTop = () => {
@@ -777,7 +884,7 @@ const handleUploadAudioChange = async (event: ChangeEvent<HTMLInputElement>) => 
   setUploadAudioError('')
   if (!file) return
   const extension = getUploadAudioExtension(file.name)
-  const normalizedMimeType = file.type.split(';')[0]?.trim().toLowerCase()
+  const inferredMimeType = extension ? inferUploadAudioMimeType(extension, file.type) : ''
   if (!extension || !isAllowedUploadAudioMimeType(file.type)) {
     clearUploadedAudio()
     setUploadAudioError('この形式の音声ファイルは対応していません')
@@ -801,7 +908,7 @@ const handleUploadAudioChange = async (event: ChangeEvent<HTMLInputElement>) => 
     clearRecordedAudio()
     setUploadedAudio((current) => {
       if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl)
-      return { file, previewUrl, durationSeconds, extension, mimeType: normalizedMimeType || file.type || `audio/${extension}` }
+      return { file, previewUrl, durationSeconds, extension, mimeType: inferredMimeType }
     })
   } catch (error) {
     console.error('upload audio duration check failed', error)
@@ -1505,7 +1612,7 @@ const handleCreatePost = async () => {
   const isComposeRecordingActive = isRecording || mediaRecorderRef.current?.state === 'recording'
   const text = composeText.trim()
   if (isPosting || isComposeRecordingActive) return
-  const audioToPost = recordedBlob ? { blob: recordedBlob, durationMs: recordedDurationMs, mimeType: recordedBlob.type || 'audio/webm', size: recordedBlob.size, extension: (recordedBlob.type.split('/')[1] || 'webm').replace('x-', '') } : uploadedAudio ? { blob: uploadedAudio.file, durationMs: Math.round(uploadedAudio.durationSeconds * 1000), mimeType: uploadedAudio.mimeType, size: uploadedAudio.file.size, extension: uploadedAudio.extension } : null
+  const audioToPost = createAudioPostUploadPayload(recordedBlob, recordedDurationMs, uploadedAudio)
   if (!session?.user || (!text && !audioToPost)) return
   if (composeVisibility === 'close_friends' && closeFriendIds.size === 0) setErrorMessage('親しい友達がまだ設定されていません。')
   if (composeVisibility === 'specific' && selectedCustomRecipientIds.size === 0) {
@@ -1514,54 +1621,124 @@ const handleCreatePost = async () => {
     return
   }
   setIsPosting(true); setErrorMessage(''); setPostingStatusMessage('投稿を準備中...')
+  const userId = session.user.id
   let storagePath: string | null = null
   let postId: string | null = null
   let shouldGoHome = false
   try {
-  if (audioToPost) {
-    storagePath = uploadedAudio ? createUploadAudioStoragePath(session.user.id, uploadedAudio.extension) : `${session.user.id}/${Date.now()}.${audioToPost.extension}`
-    setPostingStatusMessage('音声をアップロード中...')
-    const { error } = await withTimeout(sb!.storage.from(VOICE_POSTS_BUCKET).upload(storagePath, audioToPost.blob, { contentType: audioToPost.mimeType, upsert: false }))
-    if (error) {
-      console.error('voice post storage upload failed', error)
-      throw new Error('STORAGE_UPLOAD_FAILED')
+    if (audioToPost) {
+      storagePath = createUploadAudioStoragePath(userId, audioToPost.extension)
+      setPostingStatusMessage('音声をアップロード中...')
+      const uploadDebugContext = {
+        action: 'upload-audio-file',
+        source: audioToPost.source,
+        userId,
+        fileName: audioToPost.originalFileName ?? null,
+        fileType: audioToPost.originalFileType ?? audioToPost.blob.type,
+        fileSize: audioToPost.size,
+        fileObject: audioToPost.blob,
+        duration: audioToPost.durationMs,
+        inferredExt: audioToPost.extension,
+        inferredMimeType: audioToPost.mimeType,
+        storageBucket: VOICE_POSTS_BUCKET,
+        storagePath,
+        contentType: audioToPost.mimeType,
+        upsert: false
+      }
+      console.info('Audio post upload prepared', uploadDebugContext)
+      const { error: uploadError } = await withTimeout(sb!.storage.from(VOICE_POSTS_BUCKET).upload(storagePath, audioToPost.blob, { contentType: audioToPost.mimeType, upsert: false }))
+      if (uploadError) {
+        console.error('Audio file upload failed', {
+          ...uploadDebugContext,
+          uploadError: getSupabaseErrorDetails(uploadError)
+        })
+        throw new Error(`STORAGE_UPLOAD_FAILED:${getUploadFailureStatusLabel(uploadError)}`)
+      }
     }
-  }
-  const kind: PostKind = audioToPost ? (text ? 'text_audio' : 'audio') : 'text'
-  setPostingStatusMessage('投稿を保存中...')
-  const { data: postData, error: postError } = await withTimeout(sb!.from('posts').insert({ user_id: session.user.id, text, visibility: composeVisibility || defaultVisibility, kind }).select('id').single())
-  if (postError || !postData?.id) {
-    console.error('post insert failed', postError)
-    throw new Error('POST_SAVE_FAILED')
-  }
-  postId = postData.id
-  if (composeVisibility === 'specific') {
-    const recipientRows = Array.from(selectedCustomRecipientIds).map((recipientId) => ({ post_id: postData.id, recipient_id: recipientId }))
-    const { error: recipientError } = await withTimeout(sb!.from('post_recipients').insert(recipientRows))
-    if (recipientError) throw recipientError
-  }
-  if (audioToPost && storagePath) {
-    setPostingStatusMessage('音声情報を保存中...')
-    // duration_ms は録音実測またはアップロード音声の metadata duration を保存する。
-    const safeDurationMs = Number.isFinite(audioToPost.durationMs) && audioToPost.durationMs > 0 ? Math.round(audioToPost.durationMs) : null
-    const { error: audioError } = await withTimeout(sb!.from('audio_assets').insert({ owner_id: session.user.id, post_id: postData.id, storage_bucket: VOICE_POSTS_BUCKET, storage_path: storagePath, mime_type: audioToPost.mimeType, duration_ms: safeDurationMs, size_bytes: audioToPost.size }))
-    if (audioError) {
-      console.error('audio asset insert failed', audioError)
-      throw new Error('AUDIO_ASSETS_SAVE_FAILED')
+    const kind: PostKind = audioToPost ? (text ? 'text_audio' : 'audio') : 'text'
+    setPostingStatusMessage('投稿を保存中...')
+    const postPayload = { user_id: userId, text, visibility: composeVisibility || defaultVisibility, kind }
+    const { data: postData, error: postError } = await withTimeout(sb!.from('posts').insert(postPayload).select('id').single())
+    if (postError || !postData?.id) {
+      console.error('post insert failed', {
+        action: 'create-audio-post',
+        userId,
+        storageBucket: VOICE_POSTS_BUCKET,
+        storagePath,
+        postPayload,
+        postError: getSupabaseErrorDetails(postError)
+      })
+      throw new Error(`POST_SAVE_FAILED:${getUploadFailureStatusLabel(postError)}`)
     }
-  }
+    postId = postData.id
+    if (composeVisibility === 'specific') {
+      const recipientRows = Array.from(selectedCustomRecipientIds).map((recipientId) => ({ post_id: postData.id, recipient_id: recipientId }))
+      const { error: recipientError } = await withTimeout(sb!.from('post_recipients').insert(recipientRows))
+      if (recipientError) {
+        console.error('post recipients insert failed', {
+          action: 'create-audio-post-recipients',
+          userId,
+          postId: postData.id,
+          recipientCount: recipientRows.length,
+          recipientError: getSupabaseErrorDetails(recipientError)
+        })
+        throw new Error(`POST_SAVE_FAILED:${getUploadFailureStatusLabel(recipientError)}`)
+      }
+    }
+    if (audioToPost && storagePath) {
+      setPostingStatusMessage('音声情報を保存中...')
+      // duration_ms は録音実測またはアップロード音声の metadata duration を保存する。
+      const safeDurationMs = Number.isFinite(audioToPost.durationMs) && audioToPost.durationMs > 0 ? Math.round(audioToPost.durationMs) : null
+      const audioAssetPayload = { owner_id: userId, post_id: postData.id, storage_bucket: VOICE_POSTS_BUCKET, storage_path: storagePath, mime_type: audioToPost.mimeType, duration_ms: safeDurationMs, size_bytes: audioToPost.size }
+      const { error: audioError } = await withTimeout(sb!.from('audio_assets').insert(audioAssetPayload))
+      if (audioError) {
+        console.error('audio asset insert failed', {
+          action: 'save-audio-asset',
+          userId,
+          postId: postData.id,
+          source: audioToPost.source,
+          fileName: audioToPost.originalFileName ?? null,
+          fileType: audioToPost.originalFileType ?? audioToPost.blob.type,
+          fileSize: audioToPost.size,
+          duration: audioToPost.durationMs,
+          inferredExt: audioToPost.extension,
+          inferredMimeType: audioToPost.mimeType,
+          storageBucket: VOICE_POSTS_BUCKET,
+          storagePath,
+          audioAssetPayload,
+          audioAssetsInsertError: getSupabaseErrorDetails(audioError)
+        })
+        throw new Error(`AUDIO_ASSETS_SAVE_FAILED:${getUploadFailureStatusLabel(audioError)}`)
+      }
+    }
     shouldGoHome = true
-  await loadIncomingCustomPosts(session.user.id)
-  await loadPosts()
+    await loadIncomingCustomPosts(userId)
+    await loadPosts()
   } catch (error: any) {
-    console.error('create post failed', error)
+    console.error('create post failed', {
+      action: 'create-post',
+      userId,
+      postId,
+      storageBucket: VOICE_POSTS_BUCKET,
+      storagePath,
+      source: audioToPost?.source,
+      fileName: audioToPost?.originalFileName ?? null,
+      fileType: audioToPost?.originalFileType ?? audioToPost?.blob.type,
+      fileSize: audioToPost?.size,
+      duration: audioToPost?.durationMs,
+      inferredExt: audioToPost?.extension,
+      inferredMimeType: audioToPost?.mimeType,
+      error: getSupabaseErrorDetails(error)
+    })
     if (postId) await sb!.from('posts').delete().eq('id', postId)
     if (storagePath) await sb!.storage.from(VOICE_POSTS_BUCKET).remove([storagePath])
     const message = String(error?.message ?? '')
+    const detail = message.includes(':') ? message.split(':').slice(1).join(':') : ''
     if (message.includes('TIMEOUT')) setErrorMessage('投稿処理がタイムアウトしました。通信状況を確認して再試行してください。')
     else if (message.toLowerCase().includes('permission')) setErrorMessage(toFriendlyError('permission'))
-    else if (message.includes('STORAGE_UPLOAD_FAILED')) setErrorMessage(toFriendlyError('storage_upload'))
-    else if (message.includes('AUDIO_ASSETS_SAVE_FAILED')) setErrorMessage(toFriendlyError('audio_save'))
+    else if (message.includes('STORAGE_UPLOAD_FAILED')) setErrorMessage(`音声のアップロードに失敗しました${detail ? `: ${detail}` : ''}`)
+    else if (message.includes('AUDIO_ASSETS_SAVE_FAILED')) setErrorMessage(`音声情報の保存に失敗しました${detail ? `: ${detail}` : ''}`)
+    else if (message.includes('POST_SAVE_FAILED')) setErrorMessage(`投稿の保存に失敗しました${detail ? `: ${detail}` : ''}`)
     else setErrorMessage(toFriendlyError('post_save'))
   } finally {
     setIsPosting(false)
