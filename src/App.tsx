@@ -1632,6 +1632,7 @@ useEffect(() => {
 
 const followingProfiles = useMemo(() => discoverUsers.filter((user) => followingIds.has(user.id) && user.id !== session?.user.id), [discoverUsers, followingIds, session?.user.id])
 const normalizedSearchQuery = searchQuery.trim().toLowerCase()
+const normalizedUsernameSearchQuery = normalizedSearchQuery.replace(/^@+/, '')
 const isSearchingUsers = normalizedSearchQuery.length > 0
 const filteredDiscoverUsers = useMemo(() => {
   const myId = session?.user.id
@@ -1642,11 +1643,12 @@ const filteredDiscoverUsers = useMemo(() => {
     if (!normalizedSearchQuery) return
     const name = (user.display_name ?? '').toLowerCase()
     const username = (user.username ?? '').toLowerCase()
-    if (!name.includes(normalizedSearchQuery) && !username.includes(normalizedSearchQuery)) return
+    const matchesUsername = username.includes(normalizedSearchQuery) || (normalizedUsernameSearchQuery.length > 0 && username.includes(normalizedUsernameSearchQuery))
+    if (!name.includes(normalizedSearchQuery) && !matchesUsername) return
     if (!uniqueById.has(user.id)) uniqueById.set(user.id, user)
   })
   return Array.from(uniqueById.values())
-}, [discoverUsers, normalizedSearchQuery, session?.user.id])
+}, [discoverUsers, normalizedSearchQuery, normalizedUsernameSearchQuery, session?.user.id])
 const visibleFriendSuggestions = useMemo(() => {
   const myId = session?.user.id
   const uniqueById = new Map<string, Profile>()
