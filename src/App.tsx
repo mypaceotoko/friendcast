@@ -1951,7 +1951,7 @@ const goToProfile = (userId: string) => {
   if (!viewerId) return
   if (!canViewUserProfile(viewerId, userId)) {
     setViewingProfileId(userId)
-    setFollowActionError('このユーザーのプロフィールは、つながっている相手だけが見ることができます。')
+    setFollowActionError('このユーザーの投稿は、つながっている相手だけが見ることができます。')
     setScreen('profile')
     window.requestAnimationFrame(() => safeScrollToTop())
     return
