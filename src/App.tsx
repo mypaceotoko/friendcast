@@ -758,6 +758,19 @@ const voiceReplyMediaRecorderRef = useRef<MediaRecorder | null>(null)
 const voiceReplyMediaStreamRef = useRef<MediaStream | null>(null)
 const voiceReplyChunksRef = useRef<BlobPart[]>([])
 const voiceReplyTimerRef = useRef<number | null>(null)
+
+const emptyProfileEditForm: ProfileEditForm = { display_name: '', username: '', bio: '', avatar_url: '' }
+const resetProfileEditState = () => {
+  if (selectedAvatarPreviewUrl) URL.revokeObjectURL(selectedAvatarPreviewUrl)
+  setIsEditingProfile(false)
+  setProfileEditForm(emptyProfileEditForm)
+  setProfileEditErrors({})
+  setProfileEditMessage('')
+  setIsSavingProfile(false)
+  setSelectedAvatarFile(null)
+  setSelectedAvatarPreviewUrl('')
+  if (avatarFileInputRef.current) avatarFileInputRef.current.value = ''
+}
 const voiceReplyStartAtRef = useRef<number | null>(null)
 const isStoppingVoiceReplyRecorderRef = useRef(false)
 const voiceReplyPreviewAudioRef = useRef<HTMLAudioElement | null>(null)
@@ -1369,7 +1382,11 @@ useEffect(() => {
     stopVoiceReplyPreview()
   }
 }, [openedCommentsPostId, voiceReplyRecordingPostId])
-useEffect(() => { if (screen !== 'profile') setViewingProfileId(null) }, [screen])
+useEffect(() => {
+  if (screen === 'profile') return
+  setViewingProfileId(null)
+  resetProfileEditState()
+}, [screen])
 
 useEffect(() => { setProfileFollowListMode('posts'); setProfileFollowListError('') }, [viewingProfileId, screen])
 useEffect(() => () => { playAudioRef.current?.pause(); stopVoiceCommentPlayback() }, [])
@@ -1459,12 +1476,7 @@ const openProfileEditor = () => {
 }
 
 const closeProfileEditor = () => {
-  if (selectedAvatarPreviewUrl) URL.revokeObjectURL(selectedAvatarPreviewUrl)
-  setSelectedAvatarFile(null)
-  setSelectedAvatarPreviewUrl('')
-  setIsEditingProfile(false)
-  setProfileEditErrors({})
-  setProfileEditMessage('')
+  resetProfileEditState()
 }
 
 const clearSelectedAvatarFile = () => {
@@ -1986,6 +1998,7 @@ const renderAudioPlayer = (post: Post) => {
 
 const getAvatarInitial = (name: string) => name.slice(0, 1).toUpperCase()
 const goToProfile = (userId: string) => {
+  resetProfileEditState()
   const viewerId = session?.user?.id ?? ''
   if (!viewerId) return
   if (!canViewUserProfile(viewerId, userId)) {
@@ -2002,6 +2015,7 @@ const goToProfile = (userId: string) => {
 }
 
 const goToScreen = (nextScreen: Screen) => {
+  if (nextScreen !== 'profile') resetProfileEditState()
   if (nextScreen === 'compose') {
     safeScrollToTop()
     setComposeVisibility(defaultVisibility)
