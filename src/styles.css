@@ -2285,3 +2285,31 @@ body[data-theme="dark"] .voice-comment-player .audio-speed-btn{
 .comment-author-link:focus-visible{
   text-decoration:underline;
 }
+
+/* Audio file upload composer */
+.audio-compose-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;width:100%;font-weight:800;color:#5b46a6;}
+.audio-compose-heading small{font-weight:700;color:#7b719e;font-size:12px;text-align:right;}
+.audio-compose-options{display:grid;grid-template-columns:1fr;gap:12px;width:100%;}
+.audio-compose-option{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%;min-width:0;padding:10px;border-radius:20px;background:rgba(255,255,255,.42);border:1px solid rgba(128,103,198,.16);box-sizing:border-box;}
+.audio-option-title{margin:0!important;font-weight:800;color:#5b46a6;}
+.upload-audio-card{text-align:center;}
+.upload-audio-help,.upload-audio-limits{margin:0!important;color:#655d82;line-height:1.45;}
+.upload-audio-limits{font-size:12px!important;font-weight:700;}
+.upload-audio-input{display:none;}
+.upload-audio-button,.selected-audio-card button{min-height:44px;border:0;border-radius:999px;padding:0 18px;font-weight:800;background:linear-gradient(135deg,#7c5cff,#9b7bff);color:#fff;box-shadow:0 10px 24px rgba(103,75,181,.22);}
+.upload-audio-button:disabled{opacity:.62;box-shadow:none;}
+.selected-audio-card{display:grid;gap:8px;width:100%;padding:12px;border-radius:18px;background:rgba(246,243,255,.86);border:1px solid rgba(124,92,255,.2);box-sizing:border-box;text-align:left;}
+.selected-audio-card strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#3f317d;}
+.selected-audio-card p{margin:0!important;color:#5d5578;}
+.selected-audio-label{font-weight:800;color:#5b46a6!important;}
+.selected-audio-card audio{width:100%;max-width:100%;}
+.selected-audio-card button{justify-self:start;background:#efe9ff;color:#5b3fb2;box-shadow:none;border:1px solid rgba(103,75,181,.18);}
+@media (min-width:720px){.audio-compose-options{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:stretch;}.audio-compose-option{justify-content:flex-start;}}
+@media (max-width:430px){.audio-compose-heading{flex-direction:column;gap:2px;}.audio-compose-heading small{text-align:left;}.audio-compose-option{padding:9px;border-radius:18px;}.upload-audio-button,.selected-audio-card button{width:100%;}}
+.theme-dark .audio-compose-heading,body[data-theme="dark"] .audio-compose-heading,.theme-dark .audio-option-title,body[data-theme="dark"] .audio-option-title{color:#dfd5ff;}
+.theme-dark .audio-compose-heading small,body[data-theme="dark"] .audio-compose-heading small,.theme-dark .upload-audio-help,body[data-theme="dark"] .upload-audio-help,.theme-dark .upload-audio-limits,body[data-theme="dark"] .upload-audio-limits{color:#bfb7df;}
+.theme-dark .audio-compose-option,body[data-theme="dark"] .audio-compose-option{background:rgba(31,37,58,.72);border-color:rgba(196,181,253,.2);}
+.theme-dark .selected-audio-card,body[data-theme="dark"] .selected-audio-card{background:rgba(24,31,52,.86);border-color:rgba(196,181,253,.22);}
+.theme-dark .selected-audio-card strong,body[data-theme="dark"] .selected-audio-card strong,.theme-dark .selected-audio-label,body[data-theme="dark"] .selected-audio-label{color:#efeaff!important;}
+.theme-dark .selected-audio-card p,body[data-theme="dark"] .selected-audio-card p{color:#c9c2e8;}
+.theme-dark .selected-audio-card button,body[data-theme="dark"] .selected-audio-card button{background:rgba(124,92,255,.22);color:#efeaff;border-color:rgba(196,181,253,.24);}
