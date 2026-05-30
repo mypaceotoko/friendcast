@@ -1983,6 +1983,61 @@ body[data-theme="dark"]{
   color:#8062d6;
   font-weight:700;
 }
+
+.comment-body-wrap{
+  display:block;
+  width:100%;
+  max-width:100%;
+  min-width:0;
+}
+.comment-link-preview{
+  margin-top:10px;
+  margin-bottom:2px;
+  max-width:100%;
+  border-radius:18px;
+}
+.link-preview-card-compact{
+  grid-template-columns:minmax(72px, 30%) minmax(0, 1fr);
+  gap:9px;
+  padding:9px;
+  border-radius:16px;
+  box-shadow:0 6px 14px rgba(109, 67, 236, .07);
+}
+.link-preview-card-compact.no-image{
+  grid-template-columns:auto minmax(0, 1fr);
+}
+.link-preview-card-compact .link-preview-image-wrap{
+  border-radius:12px;
+  max-height:160px;
+}
+.link-preview-card-compact .link-preview-icon{
+  width:34px;
+  height:34px;
+  border-radius:12px;
+  font-size:15px;
+}
+.link-preview-card-compact .link-preview-content{
+  gap:3px;
+}
+.link-preview-card-compact .link-preview-domain{
+  font-size:11px;
+}
+.link-preview-card-compact .link-preview-title{
+  font-size:13px;
+  line-height:1.4;
+  -webkit-line-clamp:2;
+}
+.link-preview-card-compact .link-preview-description{
+  font-size:11.5px;
+  line-height:1.35;
+  -webkit-line-clamp:2;
+}
+.link-preview-card-compact .link-preview-url,
+.link-preview-card-compact .link-preview-loading{
+  font-size:11px;
+  line-height:1.3;
+}
+
 .post-text .text-link,
 .comment-body-text .text-link{
   display:inline;
@@ -2004,6 +2059,12 @@ body[data-theme="dark"] .link-preview-card{
   background:linear-gradient(135deg, rgba(30, 32, 54, .96), rgba(22, 28, 48, .94));
   color:#e5e7eb;
   box-shadow:0 10px 24px rgba(0, 0, 0, .22);
+}
+.theme-dark .comment-link-preview,
+body[data-theme="dark"] .comment-link-preview{
+  border-color:rgba(148, 163, 184, .28);
+  background:linear-gradient(135deg, rgba(30, 41, 59, .9), rgba(17, 24, 39, .92));
+  box-shadow:0 8px 18px rgba(0, 0, 0, .18);
 }
 .theme-dark .link-preview-card:hover,
 .theme-dark .link-preview-card:focus-visible,
@@ -2042,8 +2103,14 @@ body[data-theme="dark"] .link-preview-loading{
   .link-preview-card.has-image{
     grid-template-columns:1fr;
   }
+  .link-preview-card-compact.has-image{
+    grid-template-columns:1fr;
+  }
   .link-preview-image-wrap{
     max-height:180px;
+  }
+  .link-preview-card-compact .link-preview-image-wrap{
+    max-height:150px;
   }
 }
 /* Dark theme comment/reply readability */
