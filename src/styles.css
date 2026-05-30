@@ -184,6 +184,25 @@ button { cursor: pointer; }
   color: #111111;
   opacity: 1;
 }
+
+.audio-download-btn {
+  min-width: 44px;
+  min-height: 44px;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0 10px;
+  color: #4f3aa0;
+  background: rgba(103,75,181,.1) !important;
+  border: 1px solid rgba(103,75,181,.18);
+}
+.audio-download-btn:disabled { opacity: .6; cursor: progress; }
+.audio-download-label { font-size: 12px !important; font-weight: 700; white-space: nowrap; }
+.theme-dark .audio-download-btn {
+  color: #e2d9ff;
+  background: rgba(145,124,234,.18) !important;
+  border-color: rgba(188,176,243,.28);
+}
+@media (max-width:390px){.audio-download-label{position:absolute;inline-size:1px;block-size:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}}
 .global-fab { position: fixed; right: max(16px, calc((100vw - 480px) / 2 + 18px)); bottom: calc(96px + env(safe-area-inset-bottom)); width: 56px; height: 56px; border-radius: 999px; border: 0; font-size: 23px; background: #674bb5; color: #fff; box-shadow: 0 10px 24px rgba(103,75,181,.32); z-index: 75; }
 .bottom-nav { position: fixed; bottom: 0; left: 0; transform: none; width: 100%; border-radius: 0; border-left: 0; border-right: 0; border-bottom:0; padding: 10px 10px calc(10px + env(safe-area-inset-bottom)); background: rgba(249,249,255,.94); grid-template-columns: repeat(5, 1fr); opacity: 1; pointer-events: auto; }
 .bottom-nav button { border:0; background: transparent !important; color:#424154; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; min-height: 52px; padding: 6px 4px; }
