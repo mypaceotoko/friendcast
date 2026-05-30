@@ -2472,3 +2472,75 @@ body[data-theme="dark"] .compose-screen .record-duration{
     min-height: 40px;
   }
 }
+
+/* v0.8.0 friend suggestion bios */
+.friend-suggestion-card{
+  align-items:flex-start;
+  padding-block:12px;
+}
+
+.friend-suggestion-main{
+  align-items:flex-start;
+}
+
+.friend-suggestion-main .discover-avatar{
+  margin-top:2px;
+}
+
+.friend-suggestion-meta{
+  gap:2px;
+  line-height:1.25;
+}
+
+.friend-suggestion-handle{
+  font-size:12px;
+}
+
+.friend-suggestion-bio{
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+  line-clamp:2;
+  overflow:hidden;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+  margin-top:3px;
+  color:#4d5575;
+  font-size:13px;
+  line-height:1.45;
+  max-width:100%;
+}
+
+.friend-suggestion-bio.is-empty{
+  color:#9aa0b5;
+  font-size:12px;
+}
+
+.search-panel .friend-suggestion-meta .friend-suggestion-bio{
+  white-space:normal;
+}
+
+.theme-dark .friend-suggestion-bio{
+  color:#d3daf5;
+}
+
+.theme-dark .friend-suggestion-bio.is-empty{
+  color:#8993b7;
+}
+
+@media (max-width:430px){
+  .friend-suggestion-card{
+    gap:8px;
+    padding-inline:0;
+  }
+
+  .friend-suggestion-main:where(button){
+    padding-inline:4px;
+  }
+
+  .friend-suggestion-bio{
+    font-size:12.5px;
+    line-height:1.4;
+  }
+}

@@ -22,8 +22,9 @@ export const audienceLabel: Record<Visibility, string> = {
 }
 
 export const mockUsers = [
-  { name: 'いっぺい', id: '@ippei', bio: '声で日記を残すのが好き。', follows: 48, followers: 42 },
-  { name: 'ゆうや', id: '@yuya_dev', bio: '夜に雑談キャスト更新中', follows: 75, followers: 61 },
+  { name: 'いっぺい', id: '@ippei', bio: '関西在住。音声配信とゆるい雑談が好きです。', follows: 48, followers: 42 },
+  { name: 'ゆうや', id: '@yuya_dev', bio: '夜に雑談キャスト更新中。週末は長めの開発ふりかえりを録っています。音声SNSの使い心地を試すのが好きです。', follows: 75, followers: 61 },
+  { name: 'みさき', id: '@misaki', bio: '', follows: 32, followers: 58 },
 ]
 
 export const mockSearchAudioLogs = [
