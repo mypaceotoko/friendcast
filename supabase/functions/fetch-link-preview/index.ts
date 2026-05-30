@@ -21,6 +21,11 @@ type LinkPreviewResponse = {
   siteName: string
 }
 
+type YouTubeOEmbedPreview = {
+  title: string
+  image: string | null
+}
+
 const jsonResponse = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
   status,
   headers: { ...corsHeaders, 'Content-Type': 'application/json; charset=utf-8' }
@@ -102,10 +107,19 @@ const getMetaContent = (html: string, attribute: 'property' | 'name', key: strin
 
 const getTitleTag = (html: string) => cleanText(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? '')
 
+const isYouTubeUrl = (url: URL) => {
+  const host = normalizeHostname(url.hostname).replace(/^www\./, '')
+  return host === 'youtu.be' || host === 'youtube.com' || host === 'm.youtube.com'
+}
+
 const getYouTubeVideoId = (url: URL) => {
   const host = normalizeHostname(url.hostname).replace(/^www\./, '')
-  if (host === 'youtu.be') return url.pathname.split('/').filter(Boolean)[0] ?? ''
-  if (host === 'youtube.com' || host === 'm.youtube.com') return url.searchParams.get('v') ?? ''
+  const pathSegments = url.pathname.split('/').filter(Boolean)
+  if (host === 'youtu.be') return pathSegments[0] ?? ''
+  if (host === 'youtube.com' || host === 'm.youtube.com') {
+    if (pathSegments[0] === 'shorts') return pathSegments[1] ?? ''
+    return url.searchParams.get('v') ?? ''
+  }
   return ''
 }
 
@@ -131,6 +145,38 @@ const fallbackPreview = (url: URL): LinkPreviewResponse => {
     description: '',
     image: youtubeId ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg` : null,
     siteName: domain
+  }
+}
+
+const fetchYouTubeOEmbedPreview = async (url: URL): Promise<YouTubeOEmbedPreview | null> => {
+  if (!isYouTubeUrl(url)) return null
+
+  const oEmbedUrl = new URL('https://www.youtube.com/oembed')
+  oEmbedUrl.searchParams.set('url', url.toString())
+  oEmbedUrl.searchParams.set('format', 'json')
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+  try {
+    const response = await fetch(oEmbedUrl.toString(), {
+      signal: controller.signal,
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': USER_AGENT
+      }
+    })
+    if (!response.ok) throw new Error(`YouTube oEmbed failed with status ${response.status}`)
+
+    const data = await response.json() as { title?: unknown; thumbnail_url?: unknown }
+    const title = typeof data.title === 'string' ? cleanText(data.title) : ''
+    const image = typeof data.thumbnail_url === 'string' ? resolveImageUrl(data.thumbnail_url, oEmbedUrl) : null
+    if (!title && !image) return null
+    return { title, image }
+  } catch (error) {
+    console.warn('Failed to fetch YouTube oEmbed preview', { url: url.toString(), error })
+    return null
+  } finally {
+    clearTimeout(timeoutId)
   }
 }
 
@@ -193,19 +239,41 @@ const fetchHtmlWithRedirects = async (initialUrl: URL) => {
   }
 }
 
-const extractPreview = (html: string, finalUrl: URL, requestedUrl: URL): LinkPreviewResponse => {
+const enrichFallbackPreview = async (url: URL): Promise<LinkPreviewResponse> => {
+  const preview = fallbackPreview(url)
+  if (!isYouTubeUrl(url)) return preview
+
+  const youtubeId = getYouTubeVideoId(url)
+  const oEmbedPreview = await fetchYouTubeOEmbedPreview(url)
+  return {
+    ...preview,
+    title: oEmbedPreview?.title || (youtubeId ? 'YouTube video' : preview.title),
+    image: oEmbedPreview?.image ?? preview.image,
+    siteName: 'YouTube'
+  }
+}
+
+const extractPreview = async (html: string, finalUrl: URL, requestedUrl: URL): Promise<LinkPreviewResponse> => {
   const domain = normalizeHostname(finalUrl.hostname).replace(/^www\./, '')
   const youtubeId = getYouTubeVideoId(finalUrl) || getYouTubeVideoId(requestedUrl)
+  const youtubeUrl = isYouTubeUrl(finalUrl) || isYouTubeUrl(requestedUrl)
+  const requestedDomain = normalizeHostname(requestedUrl.hostname).replace(/^www\./, '') || domain
+  const ogTitle = getMetaContent(html, 'property', 'og:title')
+  const twitterTitle = getMetaContent(html, 'name', 'twitter:title')
+  const titleTag = getTitleTag(html)
+  const oEmbedPreview = youtubeUrl && !ogTitle && !twitterTitle
+    ? await fetchYouTubeOEmbedPreview(requestedUrl)
+    : null
   const ogImage = getMetaContent(html, 'property', 'og:image') || getMetaContent(html, 'name', 'twitter:image')
-  const image = resolveImageUrl(ogImage, finalUrl) ?? (youtubeId ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg` : null)
+  const image = resolveImageUrl(ogImage, finalUrl) ?? oEmbedPreview?.image ?? (youtubeId ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg` : null)
 
   return {
     url: requestedUrl.toString(),
-    domain: normalizeHostname(requestedUrl.hostname).replace(/^www\./, '') || domain,
-    title: getMetaContent(html, 'property', 'og:title') || getMetaContent(html, 'name', 'twitter:title') || getTitleTag(html) || domain,
+    domain: requestedDomain,
+    title: ogTitle || twitterTitle || oEmbedPreview?.title || titleTag || (youtubeId ? 'YouTube video' : domain),
     description: getMetaContent(html, 'property', 'og:description') || getMetaContent(html, 'name', 'twitter:description') || getMetaContent(html, 'name', 'description') || '',
     image,
-    siteName: getMetaContent(html, 'property', 'og:site_name') || domain
+    siteName: getMetaContent(html, 'property', 'og:site_name') || (youtubeUrl ? 'YouTube' : domain)
   }
 }
 
@@ -223,9 +291,9 @@ Deno.serve(async (request) => {
 
   try {
     const { html, finalUrl } = await fetchHtmlWithRedirects(url)
-    return jsonResponse(extractPreview(html, finalUrl, url))
+    return jsonResponse(await extractPreview(html, finalUrl, url))
   } catch (error) {
     console.warn('Failed to fetch link preview', { url: url.toString(), error })
-    return jsonResponse(fallbackPreview(url))
+    return jsonResponse(await enrichFallbackPreview(url))
   }
 })
