@@ -788,17 +788,48 @@ const handleThemeChange = (nextTheme: Theme) => {
   setTheme(nextTheme)
   writeLocalStorage(THEME_STORAGE_KEY, nextTheme)
 }
-const isRecordSupported = typeof window !== 'undefined' && !!window.MediaRecorder && !!navigator.mediaDevices?.getUserMedia
+const hasMediaDevices = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia
+const isRecordSupported = typeof window !== 'undefined' && !!window.MediaRecorder && hasMediaDevices
 const sb = supabase
 
 
+
+const getRecordingDebugContext = (error?: unknown) => {
+  const errorLike = error as { name?: string; message?: string; code?: string | number } | null | undefined
+  return {
+    action: 'start-recording',
+    errorName: errorLike?.name,
+    errorMessage: errorLike?.message,
+    ...(errorLike?.code !== undefined ? { errorCode: errorLike.code } : {}),
+    hasMediaDevices: typeof navigator !== 'undefined' && !!navigator.mediaDevices,
+    isSecureContext: typeof window !== 'undefined' ? window.isSecureContext : undefined,
+    origin: typeof window !== 'undefined' ? window.location.origin : undefined,
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined
+  }
+}
+
+const getRecordingErrorMessage = (error?: unknown) => {
+  const errorName = (error as { name?: string } | null | undefined)?.name
+  if (errorName === 'NotAllowedError' || errorName === 'PermissionDeniedError') {
+    return 'マイクが許可されていません。ブラウザ設定でマイクを許可してから、ページを再読み込みしてください。iPhoneの場合はSafari/Braveのサイト設定またはiPhone設定から許可してください。録音できない場合は「ファイルから選ぶ」でも投稿できます。'
+  }
+  if (errorName === 'NotFoundError') return 'マイクが見つかりませんでした。録音できない場合は「ファイルから選ぶ」でも投稿できます。'
+  if (errorName === 'NotReadableError') return 'マイクを使用できません。他のアプリが使用中の可能性があります。録音できない場合は「ファイルから選ぶ」でも投稿できます。'
+  if (typeof window !== 'undefined' && !window.isSecureContext) return '安全な接続ではないため録音を開始できません。https環境で開いてください。録音できない場合は「ファイルから選ぶ」でも投稿できます。'
+  if (!isRecordSupported) return 'このブラウザでは録音に対応していないか、マイク機能を利用できません。録音できない場合は「ファイルから選ぶ」でも投稿できます。'
+  return '録音を開始できませんでした。ブラウザ設定や通信環境を確認してください。録音できない場合は「ファイルから選ぶ」でも投稿できます。'
+}
+
+const logRecordingStartFailure = (error?: unknown) => {
+  console.error('Failed to start recording', getRecordingDebugContext(error))
+}
 
 const toFriendlyError = (scope: 'permission' | 'storage_upload' | 'signed_url' | 'mic' | 'record_unsupported' | 'post_save' | 'audio_save' | 'delete' | 'fetch' | 'comment_fetch' | 'comment_post' | 'comment_delete' | 'like_toggle' | 'repost_toggle') => ({
   permission: '投稿の保存権限でエラーが発生しました。もう一度お試しください。',
   storage_upload: '音声のアップロードに失敗しました。通信状況を確認してください。',
   signed_url: '音声の再生準備に失敗しました。もう一度タップしてください。',
-  mic: 'マイクの使用が許可されていません。ブラウザ設定から許可してください。',
-  record_unsupported: 'このブラウザでは録音に対応していません。',
+  mic: getRecordingErrorMessage(),
+  record_unsupported: getRecordingErrorMessage(),
   post_save: '投稿の保存に失敗しました。しばらくしてから再試行してください。',
   audio_save: '音声情報の保存に失敗しました。もう一度投稿してください。',
   delete: '投稿の削除に失敗しました。もう一度お試しください。',
@@ -838,7 +869,10 @@ const stopRecorder = () => {
 }
 
 const startRecording = async () => {
-  if (!isRecordSupported) return setRecordingError(toFriendlyError('record_unsupported'))
+  if (!isRecordSupported) {
+    logRecordingStartFailure(new Error('RECORDING_UNSUPPORTED'))
+    return setRecordingError(getRecordingErrorMessage())
+  }
   clearUploadedAudio()
   if (uploadAudioInputRef.current) uploadAudioInputRef.current.value = ''
   try {
@@ -882,8 +916,15 @@ const startRecording = async () => {
       })
     }, 1000)
   } catch (error) {
-    console.error('microphone denied', error)
-    setRecordingError(toFriendlyError('mic'))
+    logRecordingStartFailure(error)
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop())
+    mediaStreamRef.current = null
+    mediaRecorderRef.current = null
+    recordingStartAtRef.current = null
+    chunksRef.current = []
+    isStoppingRecorderRef.current = false
+    setIsRecording(false)
+    setRecordingError(getRecordingErrorMessage(error))
   }
 }
 
@@ -1026,7 +1067,13 @@ const stopVoiceReplyRecorder = () => {
   voiceReplyMediaStreamRef.current?.getTracks().forEach((track) => track.stop())
 }
 const startVoiceReplyRecording = async (postId: string) => {
-  if (!isRecordSupported || voiceReplyRecordingPostId) return
+  if (!isRecordSupported || voiceReplyRecordingPostId) {
+    if (!isRecordSupported) {
+      logRecordingStartFailure(new Error('RECORDING_UNSUPPORTED'))
+      setVoiceReplyErrorByPostId((prev) => ({ ...prev, [postId]: getRecordingErrorMessage() }))
+    }
+    return
+  }
   try {
     setVoiceReplyErrorByPostId((prev) => ({ ...prev, [postId]: '' }))
     clearVoiceReplyForPost(postId)
@@ -1063,8 +1110,15 @@ const startVoiceReplyRecording = async (postId: string) => {
       setVoiceReplyRecordingSecondsByPostId((prev) => ({ ...prev, [postId]: Math.min(elapsed, MAX_VOICE_REPLY_SECONDS) }))
       if (elapsed >= MAX_VOICE_REPLY_SECONDS) stopVoiceReplyRecorder()
     }, 250)
-  } catch {
-    setVoiceReplyErrorByPostId((prev) => ({ ...prev, [postId]: toFriendlyError('mic') }))
+  } catch (error) {
+    logRecordingStartFailure(error)
+    voiceReplyMediaStreamRef.current?.getTracks().forEach((track) => track.stop())
+    voiceReplyMediaStreamRef.current = null
+    voiceReplyMediaRecorderRef.current = null
+    voiceReplyChunksRef.current = []
+    voiceReplyStartAtRef.current = null
+    isStoppingVoiceReplyRecorderRef.current = false
+    setVoiceReplyErrorByPostId((prev) => ({ ...prev, [postId]: getRecordingErrorMessage(error) }))
     setVoiceReplyRecordingPostId(null)
   }
 }
