@@ -1098,7 +1098,7 @@ main.screen{padding-bottom:calc(108px + env(safe-area-inset-bottom));}
 .invite-use-row input{flex:1;margin:0;}
 .invite-list{display:grid;gap:8px;margin-top:8px;}
 .invite-actions{display:flex;flex-direction:column;gap:6px;}
-.invite-revoke-btn{min-height:44px;padding:10px 14px;}
+.invite-revoke-btn,.invite-hide-btn{min-height:44px;padding:10px 14px;}
 
 
 /* v0.7.1-b compose top spacing + floating close FAB */
