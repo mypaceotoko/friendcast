@@ -373,35 +373,39 @@ type LinkPreviewData = { url: string; domain: string; title: string; description
 type LinkPreviewCacheEntry = { status: 'success'; data: LinkPreviewData } | { status: 'error' }
 
 
-const AUDIO_DOWNLOAD_EXTENSION_BY_MIME: Record<string, string> = {
+const AUDIO_DOWNLOAD_EXTENSION_BY_MIME: Record<string, UploadAudioExtension> = {
   'audio/webm': 'webm',
   'audio/mp4': 'm4a',
   'audio/m4a': 'm4a',
   'audio/aac': 'aac',
   'audio/mpeg': 'mp3',
   'audio/mp3': 'mp3',
-  'audio/ogg': 'ogg',
   'video/webm': 'webm',
   'audio/wav': 'wav',
   'audio/x-wav': 'wav'
 }
 
-const getAudioDownloadExtension = (mimeType?: string | null, url?: string | null) => {
+const getAudioDownloadExtensionFromPath = (pathOrUrl?: string | null): UploadAudioExtension | null => {
+  const cleanPath = (pathOrUrl ?? '').split('?')[0] ?? ''
+  const extensionMatch = cleanPath.match(/\.([a-z0-9]+)$/i)
+  const extension = extensionMatch?.[1]?.toLowerCase()
+  return extension && ALLOWED_AUDIO_EXTENSIONS.includes(extension as UploadAudioExtension) ? extension as UploadAudioExtension : null
+}
+
+const getAudioDownloadExtension = (mimeType?: string | null, pathOrUrl?: string | null) => {
+  const pathExtension = getAudioDownloadExtensionFromPath(pathOrUrl)
+  if (pathExtension) return pathExtension
   const normalizedMime = (mimeType ?? '').split(';')[0]?.trim().toLowerCase()
   if (normalizedMime && AUDIO_DOWNLOAD_EXTENSION_BY_MIME[normalizedMime]) return AUDIO_DOWNLOAD_EXTENSION_BY_MIME[normalizedMime]
-  const cleanUrl = (url ?? '').split('?')[0] ?? ''
-  const extensionMatch = cleanUrl.match(/\.([a-z0-9]+)$/i)
-  const extension = extensionMatch?.[1]?.toLowerCase()
-  if (extension && ['webm', 'm4a', 'mp4', 'aac', 'mp3', 'ogg', 'wav'].includes(extension)) return extension === 'mp4' ? 'm4a' : extension
   return 'webm'
 }
 
-const buildAudioDownloadFilename = (post: Post, mimeType?: string | null, url?: string | null) => {
+const buildAudioDownloadFilename = (post: Post, mimeType?: string | null, pathOrUrl?: string | null) => {
   const createdAt = new Date(post.created_at)
   const timestamp = Number.isNaN(createdAt.getTime())
     ? post.id.slice(0, 8)
     : `${createdAt.getFullYear()}${String(createdAt.getMonth() + 1).padStart(2, '0')}${String(createdAt.getDate()).padStart(2, '0')}-${String(createdAt.getHours()).padStart(2, '0')}${String(createdAt.getMinutes()).padStart(2, '0')}`
-  return `friendcast-voice-${timestamp}.${getAudioDownloadExtension(mimeType ?? post.audioAsset?.mime_type, url ?? post.audioAsset?.storage_path)}`
+  return `friendcast-audio-${timestamp}.${getAudioDownloadExtension(mimeType ?? post.audioAsset?.mime_type, pathOrUrl ?? post.audioAsset?.storage_path)}`
 }
 
 const triggerAudioBlobDownload = (blob: Blob, filename: string) => {
@@ -2394,7 +2398,7 @@ const handleDownloadOwnAudio = async (post: Post) => {
     if (!response.ok) throw new Error(`audio fetch failed: ${response.status}`)
     const blob = await response.blob()
     if (blob.size <= 0) throw new Error('empty audio blob')
-    const filename = buildAudioDownloadFilename(post, blob.type, audioUrl)
+    const filename = buildAudioDownloadFilename(post, post.audioAsset?.mime_type ?? blob.type, post.audioAsset?.storage_path ?? audioUrl)
     triggerAudioBlobDownload(blob, filename)
   } catch (error) {
     console.error('own audio download failed', { postId: post.id, error })
