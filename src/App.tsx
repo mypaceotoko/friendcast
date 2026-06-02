@@ -2554,7 +2554,7 @@ const toggleBookmarkPost = async (postId: string | null | undefined) => {
 }
 
 
-const loadProfileFollowLists = async (targetProfileId: string) => {
+async function loadProfileFollowLists(targetProfileId: string) {
   if (!ENABLE_PROFILE_FOLLOW_LISTS || !sb || !session?.user?.id || !targetProfileId) return
   if (!canViewUserProfile(session.user.id, targetProfileId)) {
     setProfileFollowingUsers([])
@@ -2611,7 +2611,7 @@ const loadProfileFollowLists = async (targetProfileId: string) => {
   }
 }
 
-const loadMyFollowerIds = async () => {
+async function loadMyFollowerIds() {
   if (!sb || !session?.user?.id) {
     setMyFollowerIds(new Set())
     return
@@ -2928,7 +2928,7 @@ const handleCreateVoiceComment = async (postId: string) => {
   }
 }
 
-const loadMyInvites = async () => {
+async function loadMyInvites() {
   if (!sb || !session?.user?.id) return
   const { data, error } = await sb.from('invites').select('id,inviter_id,code,used_by,used_at,created_at,expires_at,status,hidden_at').eq('inviter_id', session.user.id).is('hidden_at', null).order('created_at', { ascending: false })
   if (error) {
