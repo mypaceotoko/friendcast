@@ -2661,6 +2661,7 @@ body[data-theme="dark"] .compose-screen .record-duration{
   background:linear-gradient(135deg, rgba(250,247,255,.96), rgba(245,241,255,.88));
 }
 .privacy-toggle-row{
+  appearance:none;
   display:flex;
   align-items:center;
   justify-content:space-between;
@@ -2671,9 +2672,12 @@ body[data-theme="dark"] .compose-screen .record-duration{
   border-radius:18px;
   padding:14px;
   background:rgba(255,255,255,.72);
+  color:inherit;
+  text-align:left;
   cursor:pointer;
 }
 .privacy-toggle-row.is-disabled{cursor:not-allowed;opacity:.72;}
+.privacy-toggle-row:focus-visible{outline:3px solid rgba(139,92,246,.3);outline-offset:3px;}
 .privacy-toggle-copy{
   display:flex;
   flex-direction:column;
@@ -2687,11 +2691,6 @@ body[data-theme="dark"] .compose-screen .record-duration{
   align-items:center;
   gap:8px;
   flex:0 0 auto;
-}
-.privacy-switch input{
-  position:absolute;
-  opacity:0;
-  pointer-events:none;
 }
 .privacy-switch-track{
   position:relative;
@@ -2714,12 +2713,12 @@ body[data-theme="dark"] .compose-screen .record-duration{
   box-shadow:0 4px 10px rgba(79,70,229,.22);
   transition:transform .18s ease;
 }
-.privacy-switch input:checked + .privacy-switch-track{
+.privacy-toggle-row.is-on .privacy-switch-track{
   background:linear-gradient(135deg,#8b5cf6,#c084fc);
   box-shadow:0 8px 18px rgba(139,92,246,.28);
 }
-.privacy-switch input:checked + .privacy-switch-track .privacy-switch-thumb{transform:translateX(20px);}
-.privacy-switch input:focus-visible + .privacy-switch-track{outline:3px solid rgba(139,92,246,.28);outline-offset:3px;}
+.privacy-toggle-row.is-on .privacy-switch-thumb{transform:translateX(20px);}
+.privacy-toggle-row.is-off .privacy-switch-label{color:#6b7280;}
 .privacy-switch-label{
   min-width:26px;
   color:#6d28d9;
