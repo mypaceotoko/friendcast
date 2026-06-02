@@ -2765,3 +2765,8 @@ body[data-theme="dark"] .compose-screen .record-duration{
   .privacy-switch{justify-content:space-between;width:100%;}
   .profile-edit-settings-guide .soft-action-button{width:100%;white-space:normal;}
 }
+.login-help { margin-top: 16px; text-align: left; color: #42557f; font-size: 13px; }
+.login-help summary { cursor: pointer; font-weight: 700; text-align: center; }
+.login-help ul { margin: 10px 0 0; padding-left: 20px; }
+.login-help li { margin: 4px 0; }
+.login-retry-btn { margin-top: 12px; }

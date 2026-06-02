@@ -26,6 +26,39 @@ type InviteRow = { id: string; inviter_id: string; code: string; used_by: string
 type ActivityItem = { id: string; type: 'comment' | 'like' | 'repost' | 'follow' | 'invite_used'; actor: Profile; postId?: string; postPreview?: string; body?: string; commentType?: CommentType; code?: string; createdAt: string }
 type UploadedAudioSelection = { file: File; previewUrl: string; durationSeconds: number; extension: UploadAudioExtension; mimeType: string }
 
+type InitialLoadPhase = 'get-session' | 'auth-state-change' | 'load-profile' | 'load-timeline' | 'load-posts' | 'load-follows' | 'load-followers' | 'load-friendSuggestions' | 'load-invites' | 'load-activities' | 'load-close-friends' | 'load-settings' | 'load-post-bookmarks' | 'load-custom-recipients' | 'load-discover-users'
+type AuthStatus = 'authLoading' | 'noSession' | 'authenticated'
+
+const getErrorDebugValue = (error: unknown, key: 'name' | 'message' | 'code' | 'details' | 'hint') => {
+  if (!error || typeof error !== 'object') return undefined
+  return (error as Record<string, unknown>)[key]
+}
+
+const logInitialLoadFailure = (phase: InitialLoadPhase, error: unknown, activeSession: Session | null = null) => {
+  console.error('Friendcast initial load failed', {
+    phase,
+    hasSession: !!activeSession,
+    userId: activeSession?.user?.id ?? null,
+    errorName: getErrorDebugValue(error, 'name'),
+    errorMessage: getErrorDebugValue(error, 'message'),
+    errorCode: getErrorDebugValue(error, 'code'),
+    errorDetails: getErrorDebugValue(error, 'details'),
+    errorHint: getErrorDebugValue(error, 'hint'),
+    isSecureContext: typeof window !== 'undefined' ? window.isSecureContext : undefined,
+    origin: typeof window !== 'undefined' ? window.location.origin : undefined,
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined
+  })
+}
+
+const loginRecoveryTips = [
+  '古いFriendcastのタブをすべて閉じる',
+  'ページを再読み込みする',
+  'Braveの場合はShieldsをOFFにする',
+  'Chromeで開き直す',
+  'サイトデータを削除して再ログインする'
+]
+
+
 const visibilityComposeLabel: Record<Visibility, string> = { followers: 'フォロワー', close_friends: '親しい友達', specific: 'カスタム', private: '自分のみ' }
 const visibilityBadgeIcon: Record<Visibility, string> = { followers: '◉', close_friends: '◎', specific: '✦', private: '◐' }
 
@@ -625,6 +658,10 @@ const [isPosting, setIsPosting] = useState(false)
 const [postsStatus, setPostsStatus] = useState<PostsStatus>('idle')
 const [postsError, setPostsError] = useState('')
 const [initialAuthLoading, setInitialAuthLoading] = useState(true)
+const [authStatus, setAuthStatus] = useState<AuthStatus>('authLoading')
+const [profileLoading, setProfileLoading] = useState(false)
+const [profileLoadError, setProfileLoadError] = useState('')
+const [, setAppLoadError] = useState('')
 const [sessionRestoreError, setSessionRestoreError] = useState('')
 const [recordingError, setRecordingError] = useState('')
 const [recordingNotice, setRecordingNotice] = useState('')
@@ -1122,6 +1159,7 @@ const loadPosts = async () => {
   setPostsStatus('loading'); setPostsError('')
   const { data: postsData, error: postsErrorValue } = await sb!.from('posts').select('id,text,visibility,created_at,user_id,kind,audio_assets(id,post_id,storage_bucket,storage_path,mime_type,duration_ms,size_bytes)').order('created_at', { ascending: false }).limit(100)
   if (postsErrorValue) {
+    logInitialLoadFailure('load-posts', postsErrorValue, session)
     setPosts([])
     setProfileMap({})
     setPostsStatus('error')
@@ -1134,6 +1172,7 @@ const loadPosts = async () => {
   if (userIds.length === 0) { setProfileMap({}); setPostsStatus('loaded'); return }
   const { data: profilesData, error: profilesError } = await sb!.from('profiles').select('id,username,display_name,avatar_url,bio').in('id', userIds)
   if (profilesError) {
+    logInitialLoadFailure('load-posts', profilesError, session)
     setProfileMap({})
     setPostsStatus('error')
     setPostsError(toFriendlyError('fetch'))
@@ -1146,7 +1185,7 @@ const loadPosts = async () => {
 const loadFollowing = async (userId: string) => {
   const { data, error } = await sb!.from('follows').select('following_id').eq('follower_id', userId)
   if (error) {
-    console.error('load following failed', error)
+    logInitialLoadFailure('load-follows', error, session)
     setFollowActionError(toFollowError())
     return
   }
@@ -1213,14 +1252,7 @@ const loadRepostsForPosts = async (postIds: string[], userId: string) => {
 const loadBookmarkedPostIds = async (userId: string) => {
   const { data, error } = await sb!.from('post_bookmarks').select('post_id').eq('user_id', userId)
   if (error) {
-    console.error('bookmarks fetch failed', {
-      error,
-      message: error?.message,
-      code: error?.code,
-      details: error?.details,
-      hint: error?.hint,
-      userId
-    })
+    logInitialLoadFailure('load-post-bookmarks', error, session)
     return
   }
   setBookmarkedPostIds(new Set((data ?? []).map((row) => row.post_id).filter(Boolean)))
@@ -1303,23 +1335,26 @@ const loadCommentsForPost = async (postId: string) => {
 }
 
 const loadCloseFriends = async (userId: string) => {
-  const [{ data: ownedData, error: ownedError }, { data: incomingData, error: incomingError }] = await Promise.all([
+  const [ownedResult, incomingResult] = await Promise.allSettled([
     sb!.from('close_friends').select('friend_id').eq('owner_id', userId),
     sb!.from('close_friends').select('owner_id').eq('friend_id', userId)
   ])
-  if (ownedError || incomingError) {
-    console.error('load close friends failed', ownedError ?? incomingError)
+  const ownedResponse = ownedResult.status === 'fulfilled' ? ownedResult.value : null
+  const incomingResponse = incomingResult.status === 'fulfilled' ? incomingResult.value : null
+  const failure = ownedResult.status === 'rejected' ? ownedResult.reason : incomingResult.status === 'rejected' ? incomingResult.reason : ownedResponse?.error ?? incomingResponse?.error
+  if (failure) {
+    logInitialLoadFailure('load-close-friends', failure, session)
     setCloseFriendsError(toCloseFriendsError())
     return
   }
-  setCloseFriendIds(new Set((ownedData ?? []).map((row) => row.friend_id).filter(Boolean)))
-  setIncomingCloseFriendOwnerIds(new Set((incomingData ?? []).map((row) => row.owner_id).filter(Boolean)))
+  setCloseFriendIds(new Set((ownedResponse?.data ?? []).map((row) => row.friend_id).filter(Boolean)))
+  setIncomingCloseFriendOwnerIds(new Set((incomingResponse?.data ?? []).map((row) => row.owner_id).filter(Boolean)))
 }
 
 const loadIncomingCustomPosts = async (userId: string) => {
   const { data, error } = await sb!.from('post_recipients').select('post_id').eq('recipient_id', userId)
   if (error) {
-    console.error('load incoming custom posts failed', error)
+    logInitialLoadFailure('load-timeline', error, session)
     return
   }
   setIncomingCustomPostIds(new Set((data ?? []).map((row) => row.post_id).filter(Boolean)))
@@ -1330,7 +1365,7 @@ const loadDiscoverUsers = async (userId: string) => {
   setDiscoverError('')
   const { data, error } = await sb!.from('profiles').select('id,username,display_name,avatar_url,bio,is_discoverable').neq('id', userId).order('display_name', { ascending: true, nullsFirst: false }).limit(100)
   if (error) {
-    console.error('load discover users failed', error)
+    logInitialLoadFailure('load-discover-users', error, session)
     setDiscoverUsers([])
     setDiscoverStatus('error')
     setDiscoverError(toDiscoverError())
@@ -1357,24 +1392,45 @@ const loadFriendSuggestions = async (userId: string) => {
     setFriendSuggestions(Array.isArray(candidateProfiles) ? candidateProfiles.slice(0, 10) : [])
     setFriendSuggestionsStatus('loaded')
   } catch (error) {
-    console.error('load friend suggestions failed', error)
+    logInitialLoadFailure('load-friendSuggestions', error, session)
     setFriendSuggestions([])
     setFriendSuggestionsStatus('error')
     setFriendSuggestionsError('友達候補を読み込めませんでした')
   }
 }
 
+const runOptionalInitialLoad = async (phase: InitialLoadPhase, task: () => Promise<void>, activeSession: Session) => {
+  try {
+    await withTimeout(task(), INIT_TIMEOUT_MS)
+  } catch (error) {
+    logInitialLoadFailure(phase, error, activeSession)
+  }
+}
+
 const initializeUserData = async (activeSession: Session) => {
   const userId = activeSession.user.id
+  setAppLoadError('')
+  setProfileLoadError('')
+  setProfileLoading(true)
+  try {
+    await withTimeout(ensureProfile(activeSession), INIT_TIMEOUT_MS)
+  } catch (error) {
+    logInitialLoadFailure('load-profile', error, activeSession)
+    setProfile(null)
+    setProfileLoadError('プロフィールの読み込みに失敗しました。ページを再読み込みするか、時間をおいてもう一度お試しください。')
+    return
+  } finally {
+    setProfileLoading(false)
+  }
+
   await Promise.allSettled([
-    withTimeout(ensureProfile(activeSession), INIT_TIMEOUT_MS),
-    withTimeout(loadPosts(), INIT_TIMEOUT_MS),
-    withTimeout(loadFollowing(userId), INIT_TIMEOUT_MS),
-    withTimeout(loadCloseFriends(userId), INIT_TIMEOUT_MS),
-    withTimeout(loadDiscoverUsers(userId), INIT_TIMEOUT_MS),
-    withTimeout(loadFriendSuggestions(userId), INIT_TIMEOUT_MS),
-    withTimeout(loadIncomingCustomPosts(userId), INIT_TIMEOUT_MS),
-    withTimeout(loadBookmarkedPostIds(userId), INIT_TIMEOUT_MS)
+    runOptionalInitialLoad('load-posts', loadPosts, activeSession),
+    runOptionalInitialLoad('load-follows', () => loadFollowing(userId), activeSession),
+    runOptionalInitialLoad('load-close-friends', () => loadCloseFriends(userId), activeSession),
+    runOptionalInitialLoad('load-discover-users', () => loadDiscoverUsers(userId), activeSession),
+    runOptionalInitialLoad('load-friendSuggestions', () => loadFriendSuggestions(userId), activeSession),
+    runOptionalInitialLoad('load-timeline', () => loadIncomingCustomPosts(userId), activeSession),
+    runOptionalInitialLoad('load-post-bookmarks', () => loadBookmarkedPostIds(userId), activeSession)
   ])
 }
 
@@ -1451,8 +1507,49 @@ useEffect(() => {
   })
   return () => { mounted = false }
 }, [viewingProfileId, profile?.id])
+
+const clearAuthenticatedState = () => {
+  setProfile(null)
+  setPosts([])
+  setProfileMap({})
+  setPostsStatus('idle')
+  setPostsError('')
+  setProfileLoadError('')
+  setAppLoadError('')
+  setProfileLoading(false)
+  setFollowingIds(new Set())
+  setMyFollowerIds(new Set())
+  setProfileFollowingUsers([])
+  setProfileFollowerUsers([])
+  setBookmarkedPostIds(new Set())
+  setLikedPostIds(new Set())
+  setLikesCountMap({})
+  setCloseFriendIds(new Set())
+  setIncomingCloseFriendOwnerIds(new Set())
+  setIncomingCustomPostIds(new Set())
+  setDiscoverUsers([])
+  setDiscoverStatus('idle')
+  setDiscoverError('')
+  setFriendSuggestions([])
+  setFriendSuggestionsStatus('idle')
+  setFriendSuggestionsError('')
+  setMyInvites([])
+  setActivityItems([])
+  setActivityError('')
+  setActivityLoading(false)
+  setCommentsCountMap({})
+  setCommentsByPostId({})
+  setCommentProfileMap({})
+  setOpenedCommentsPostId(null)
+  setViewingProfileId(null)
+  setErrorMessage('')
+  setFollowActionError('')
+  setCloseFriendsError('')
+}
+
 useEffect(() => {
   if (!supabase) {
+    setAuthStatus('noSession')
     setInitialAuthLoading(false)
     isRestoringSessionRef.current = false
     setSessionRestoreError('設定エラー: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY を確認してください。')
@@ -1461,19 +1558,29 @@ useEffect(() => {
 
   let isMounted = true
   const bootstrap = async () => {
+    setAuthStatus('authLoading')
     try {
       const { data, error } = await withTimeout(sb!.auth.getSession(), INIT_TIMEOUT_MS)
       if (!isMounted) return
       if (error) throw error
-      setSession(data.session ?? null)
+      const restoredSession = data.session ?? null
+      setSession(restoredSession)
+      setAuthStatus(restoredSession ? 'authenticated' : 'noSession')
+      setSessionRestoreError('')
       setInitialAuthLoading(false)
       isRestoringSessionRef.current = false
-      if (!data.session) return
-      void initializeUserData(data.session)
+      if (!restoredSession) {
+        clearAuthenticatedState()
+        return
+      }
+      void initializeUserData(restoredSession)
     } catch (error) {
-      console.error('initial session restore failed', error)
+      logInitialLoadFailure('get-session', error, null)
       if (isMounted) {
-        setSessionRestoreError('読み込みに失敗しました。再読み込みしても改善しない場合は設定を確認してください。')
+        setSession(null)
+        setAuthStatus('noSession')
+        clearAuthenticatedState()
+        setSessionRestoreError('ログイン準備中にエラーが発生しました。ページを再読み込みしてください。改善しない場合は、古いタブを閉じる、ブラウザのキャッシュ削除、またはChromeでお試しください。')
         setInitialAuthLoading(false)
       }
       isRestoringSessionRef.current = false
@@ -1481,11 +1588,21 @@ useEffect(() => {
   }
 
   void bootstrap()
-  const { data: listener } = sb!.auth.onAuthStateChange((_event, newSession) => {
+  const { data: listener } = sb!.auth.onAuthStateChange((event, newSession) => {
     if (!isMounted || isRestoringSessionRef.current) return
+    if (event === 'SIGNED_OUT' || !newSession) {
+      setSession(null)
+      setAuthStatus('noSession')
+      setSessionRestoreError('')
+      clearAuthenticatedState()
+      return
+    }
     setSession(newSession)
-    if (!newSession) return
-    void initializeUserData(newSession)
+    setAuthStatus('authenticated')
+    setSessionRestoreError('')
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+      void initializeUserData(newSession).catch((error) => logInitialLoadFailure('auth-state-change', error, newSession))
+    }
   })
 
   return () => {
@@ -2217,10 +2334,25 @@ useEffect(() => {
 
 const canViewProfileFollowData = !!session?.user?.id && !!activeProfileId && canViewUserProfile(session.user.id, activeProfileId)
 
-if (!isSupabaseConfigured || !supabase) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p className="status-message status-error">設定エラー: Supabaseの環境変数が不足しています。</p><p>VITE_SUPABASE_URL と VITE_SUPABASE_ANON_KEY を Vercel Preview に設定してください。</p></article></main></div>
-if (initialAuthLoading) return <div className={`app-shell theme-${resolvedTheme}`}><div className="login-card"><h1>friendcast</h1><p>ログイン状態を確認中です...（最大8秒）</p></div></div>
+const handleGoogleLogin = async () => {
+  try {
+    const redirectTo = getAuthRedirectUrl()
+    await supabase?.auth.signInWithOAuth({ provider: 'google', options: redirectTo ? { redirectTo } : undefined })
+  } catch (error) {
+    logInitialLoadFailure('auth-state-change', error, session)
+    setSessionRestoreError('Googleログインの開始に失敗しました。ページを再読み込みしてもう一度お試しください。')
+  }
+}
 
-if (!session) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p>親しい人にだけ届ける、声のタイムライン</p>{sessionRestoreError && <p className="status-message status-error">{sessionRestoreError}</p>}<button className="google-login-btn" onClick={async () => { const redirectTo = getAuthRedirectUrl(); await supabase?.auth.signInWithOAuth({ provider: 'google', options: redirectTo ? { redirectTo } : undefined }) }}>Googleでログイン</button></article></main></div>
+const LoginRecoveryHelp = () => <details className="login-help"><summary>ログインできない場合</summary><ul>{loginRecoveryTips.map((tip) => <li key={tip}>{tip}</li>)}</ul></details>
+
+if (!isSupabaseConfigured || !supabase) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p className="status-message status-error">設定エラー: Supabaseの環境変数が不足しています。</p><p>VITE_SUPABASE_URL と VITE_SUPABASE_ANON_KEY を Vercel Preview に設定してください。</p><button className="soft-action-button" type="button" onClick={() => window.location.reload()}>もう一度読み込む</button><LoginRecoveryHelp /></article></main></div>
+if (initialAuthLoading || authStatus === 'authLoading') return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p>ログイン状態を確認中です...（最大8秒）</p></article></main></div>
+
+if (!session) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p>親しい人にだけ届ける、声のタイムライン</p>{sessionRestoreError && <p className="status-message status-error">{sessionRestoreError}</p>}<button className="google-login-btn" onClick={() => void handleGoogleLogin()}>Googleでログイン</button>{sessionRestoreError && <button className="soft-action-button login-retry-btn" type="button" onClick={() => window.location.reload()}>もう一度読み込む</button>}<LoginRecoveryHelp /></article></main></div>
+
+if (profileLoading) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p>プロフィールを確認中です...</p></article></main></div>
+if (profileLoadError) return <div className={`app-shell theme-${resolvedTheme}`}><main className="screen login-screen"><article className="login-card"><h1>friendcast</h1><p className="status-message status-error">{profileLoadError}</p><button className="soft-action-button" type="button" onClick={() => void initializeUserData(session)}>もう一度読み込む</button><button className="logout-btn" type="button" onClick={() => sb?.auth.signOut()}>ログアウトしてログイン画面へ</button><LoginRecoveryHelp /></article></main></div>
 
 
 
@@ -2800,7 +2932,7 @@ const loadMyInvites = async () => {
   if (!sb || !session?.user?.id) return
   const { data, error } = await sb.from('invites').select('id,inviter_id,code,used_by,used_at,created_at,expires_at,status,hidden_at').eq('inviter_id', session.user.id).is('hidden_at', null).order('created_at', { ascending: false })
   if (error) {
-    console.error('load invites failed', error)
+    logInitialLoadFailure('load-invites', error, session)
     setInviteActionError('招待コード一覧の取得に失敗しました。時間をおいて再試行してください。')
     setMyInvites([])
     return
@@ -3034,18 +3166,29 @@ const loadActivities = async () => {
   try {
     const myId = session.user.id
     const myPostIds = posts.filter((post) => post.user_id === myId).map((post) => post.id)
-    const [commentsRes, likesRes, repostsRes, followsRes, invitesRes] = await Promise.all([
+    const activityResults = await Promise.allSettled([
       myPostIds.length ? sb.from('comments').select('id,post_id,user_id,body,created_at,comment_type').in('post_id', myPostIds).neq('user_id', myId).order('created_at',{ascending:false}).limit(20) : Promise.resolve({ data: [], error: null }),
       myPostIds.length ? sb.from('post_likes').select('post_id,user_id,created_at').in('post_id', myPostIds).neq('user_id', myId).order('created_at',{ascending:false}).limit(20) : Promise.resolve({ data: [], error: null }),
       myPostIds.length ? sb.from('post_reposts').select('post_id,user_id,created_at').in('post_id', myPostIds).neq('user_id', myId).order('created_at',{ascending:false}).limit(20) : Promise.resolve({ data: [], error: null }),
       sb.from('follows').select('follower_id,created_at').eq('following_id', myId).order('created_at',{ascending:false}).limit(20),
       sb.from('invites').select('id,code,used_by,used_at').eq('inviter_id', myId).not('used_by','is',null).order('used_at',{ascending:false}).limit(20)
     ])
+    const toActivityResponse = (index: number): { data: any[]; error: unknown } => {
+      const result = activityResults[index]
+      if (result.status === 'fulfilled') return result.value as { data: any[]; error: unknown }
+      logInitialLoadFailure('load-activities', result.reason, session)
+      return { data: [], error: result.reason }
+    }
+    const commentsRes = toActivityResponse(0)
+    const likesRes = toActivityResponse(1)
+    const repostsRes = toActivityResponse(2)
+    const followsRes = toActivityResponse(3)
+    const invitesRes = toActivityResponse(4)
     const errors = [commentsRes.error, likesRes.error, repostsRes.error, followsRes.error, invitesRes.error].filter(Boolean)
-    if (errors.length) { console.error('activity fetch failed', errors); setActivityError('一部のアクティビティを読み込めませんでした') }
+    if (errors.length) { errors.forEach((error) => logInitialLoadFailure('load-activities', error, session)); setActivityError('一部のアクティビティを読み込めませんでした') }
     const actorIds = Array.from(new Set([...(commentsRes.data ?? []).map((row) => row.user_id), ...(likesRes.data ?? []).map((row) => row.user_id), ...(repostsRes.data ?? []).map((row) => row.user_id), ...(followsRes.data ?? []).map((row) => row.follower_id), ...(invitesRes.data ?? []).map((row) => row.used_by).filter(Boolean)]))
     const actors: Record<string, Profile> = {}
-    if (actorIds.length) { const { data, error } = await sb.from('profiles').select('id,username,display_name,avatar_url,bio').in('id', actorIds); if (error) console.error('activity profiles fetch failed', error); (data ?? []).forEach((row) => { actors[row.id] = row as Profile }) }
+    if (actorIds.length) { const { data, error } = await sb.from('profiles').select('id,username,display_name,avatar_url,bio').in('id', actorIds); if (error) logInitialLoadFailure('load-activities', error, session); (data ?? []).forEach((row) => { actors[row.id] = row as Profile }) }
     const fallbackActor: Profile = { id: 'unknown', username: 'user', display_name: 'friendcast user', avatar_url: null, bio: '' }
     const safeDate = (value: unknown) => (typeof value === 'string' && value ? value : new Date(0).toISOString())
     const items: ActivityItem[] = [
@@ -3056,7 +3199,7 @@ const loadActivities = async () => {
       ...(invitesRes.data ?? []).filter((row) => !!row?.used_by).map((row) => ({ id: `invite_${row.id}`, type: 'invite_used' as const, actor: actors[row.used_by as string] ?? { ...fallbackActor, id: row.used_by as string }, code: String(row.code ?? ''), createdAt: safeDate(row.used_at) }))
     ].filter((item) => !!item?.actor?.id && !!item?.createdAt).sort((a, b) => Date.parse(b.createdAt || '') - Date.parse(a.createdAt || '')).slice(0, 20)
     setActivityItems(items)
-  } catch (error) { console.error('activity fetch exception', error); setActivityError('アクティビティを読み込めませんでした') } finally { setActivityLoading(false) }
+  } catch (error) { logInitialLoadFailure('load-activities', error, session); setActivityError('アクティビティを読み込めませんでした') } finally { setActivityLoading(false) }
 }
 const activityMessage = (item: ActivityItem) => item.type === 'comment' ? (item.commentType === 'voice' ? 'あなたの投稿に音声で返信しました' : 'あなたの投稿にコメントしました') : item.type === 'like' ? 'あなたの投稿にいいねしました' : item.type === 'repost' ? 'あなたの投稿をリポストしました' : item.type === 'follow' ? 'あなたをフォローしました' : '招待コードを使いました'
 const activityIcon = (item: ActivityItem) => item.type === 'follow' ? '👤' : item.type === 'comment' ? (item.commentType === 'voice' ? '🎙️' : '💬') : item.type === 'like' ? '❤️' : item.type === 'repost' ? '🔁' : '✨'
