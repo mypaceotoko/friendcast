@@ -2772,3 +2772,32 @@ body[data-theme="dark"] .compose-screen .record-duration{
 .login-retry-btn { margin-top: 12px; }
 .record-limit-warning{margin:0;color:#b7791f;font-size:12px;font-weight:700;line-height:1.35;text-align:center;}
 .theme-dark .record-limit-warning{color:#f6c768;}
+
+.build-update-toast{
+  position:fixed;
+  left:50%;
+  bottom:calc(84px + env(safe-area-inset-bottom));
+  z-index:60;
+  width:min(420px,calc(100vw - 28px));
+  transform:translateX(-50%);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:12px 14px;
+  border:1px solid rgba(99,102,241,.25);
+  border-radius:18px;
+  background:rgba(255,255,255,.96);
+  box-shadow:0 14px 40px rgba(15,23,42,.18);
+  box-sizing:border-box;
+}
+.build-update-toast div{display:flex;flex-direction:column;gap:3px;min-width:0;}
+.build-update-toast strong{font-size:14px;color:#2f3150;}
+.build-update-toast small{font-size:11px;color:rgba(61,66,96,.78);line-height:1.35;}
+.build-update-toast .follow-btn{flex:0 0 auto;margin:0;white-space:nowrap;}
+.build-update-toast .follow-btn:disabled{opacity:.55;cursor:not-allowed;}
+.build-update-warning{color:#b45309!important;}
+.theme-dark .build-update-toast{background:rgba(18,27,49,.97);border-color:rgba(125,211,252,.28);box-shadow:0 18px 48px rgba(0,0,0,.45);}
+.theme-dark .build-update-toast strong{color:#f8fbff;}
+.theme-dark .build-update-toast small{color:rgba(218,226,255,.78);}
+.app-build-card .app-build-detail{font-size:12px;overflow-wrap:anywhere;}
