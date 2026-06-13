@@ -141,6 +141,10 @@ const VOICE_POSTS_BUCKET = 'voice-posts'
 // isTypeSupportedで対応形式を確認し、既存の既定挙動と同じ優先形式を明示指定することで recorder.mimeType を安定させる。
 const PREFERRED_RECORDING_MIME_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/aac']
 
+// Android Chrome/Braveはbitrate未指定時に既定値が低くなりやすく音質が悪化するため明示指定する。
+// 20分(1200秒)録音時で約18.3MB程度となり、MAX_UPLOAD_AUDIO_SIZE_BYTES(30MB)の範囲内。
+const PREFERRED_RECORDING_AUDIO_BITS_PER_SECOND = 128000
+
 const getPreferredRecordingMimeType = (): string | undefined => {
   if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') return undefined
   return PREFERRED_RECORDING_MIME_TYPES.find((type) => {
@@ -156,12 +160,16 @@ const createPreferredMediaRecorder = (stream: MediaStream) => {
   const preferredMimeType = getPreferredRecordingMimeType()
   if (preferredMimeType) {
     try {
-      return new MediaRecorder(stream, { mimeType: preferredMimeType })
+      return new MediaRecorder(stream, { mimeType: preferredMimeType, audioBitsPerSecond: PREFERRED_RECORDING_AUDIO_BITS_PER_SECOND })
     } catch {
       // フォールバック: 明示指定が拒否された場合はブラウザ既定に委ねる
     }
   }
-  return new MediaRecorder(stream)
+  try {
+    return new MediaRecorder(stream, { audioBitsPerSecond: PREFERRED_RECORDING_AUDIO_BITS_PER_SECOND })
+  } catch {
+    return new MediaRecorder(stream)
+  }
 }
 const BUILD_INFO_URL = '/build-info.json'
 const BUILD_INFO_CHECK_INTERVAL_MS = 5 * 60 * 1000
