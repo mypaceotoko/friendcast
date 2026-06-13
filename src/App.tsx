@@ -113,6 +113,19 @@ const MAX_BROWSER_RECORDING_MS = MAX_BROWSER_RECORDING_SECONDS * 1000
 const BROWSER_RECORDING_WARNING_SECONDS = 19 * 60 + 30
 const MAX_UPLOAD_AUDIO_SIZE_BYTES = MAX_AUDIO_FILE_BYTES
 const MAX_UPLOAD_AUDIO_DURATION_SECONDS = MAX_AUDIO_DURATION_SECONDS
+
+// echoCancellation/noiseSuppression/autoGainControlを明示し、Android端末の既定値ばらつき（特にAGC無効時の不安定さ）を抑える。
+// 非対応ブラウザでは無視されるため、iPhone Safari等の既存挙動は変わらない。
+const RECORDING_AUDIO_CONSTRAINTS: MediaTrackConstraints = {
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true
+}
+
+// Android Chrome/Braveはマイク取得直後、AGC/ノイズ抑制が安定するまでの数百msで音声が不安定になりやすい。
+// MediaRecorder.start()をこの分だけ遅らせ、録音開始直後の「プツプツ」を録音範囲外にする。
+const RECORDING_START_WARMUP_MS = 300
+
 const ALLOWED_AUDIO_EXTENSIONS = ['m4a', 'mp3', 'webm', 'wav', 'aac'] as const
 type UploadAudioExtension = typeof ALLOWED_AUDIO_EXTENSIONS[number]
 const AUDIO_MIME_TYPE_BY_EXTENSION: Record<UploadAudioExtension, string> = {
@@ -1095,10 +1108,10 @@ const startRecording = async () => {
     setRecordedUrl('')
     setRecordedDurationMs(0)
     setRecordingSeconds(0)
-    recordingStartAtRef.current = Date.now()
+    recordingStartAtRef.current = null
     recordingSizeBytesRef.current = 0
     chunksRef.current = []
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: RECORDING_AUDIO_CONSTRAINTS })
     mediaStreamRef.current = stream
     const recorder = createPreferredMediaRecorder(stream)
     mediaRecorderRef.current = recorder
@@ -1132,9 +1145,17 @@ const startRecording = async () => {
       mediaRecorderRef.current = null
       recordingSizeBytesRef.current = blob.size
     }
-    recorder.start(1000)
     isStoppingRecorderRef.current = false
     setIsRecording(true)
+    if (RECORDING_START_WARMUP_MS > 0) {
+      await new Promise((resolve) => window.setTimeout(resolve, RECORDING_START_WARMUP_MS))
+    }
+    if (!stream.getAudioTracks().some((track) => track.readyState === 'live')) {
+      mediaRecorderRef.current = null
+      return
+    }
+    recordingStartAtRef.current = Date.now()
+    recorder.start(1000)
     recordingTimerRef.current = window.setInterval(() => {
       const elapsed = Math.floor((Date.now() - (recordingStartAtRef.current ?? Date.now())) / 1000)
       const boundedElapsed = Math.min(elapsed, MAX_BROWSER_RECORDING_SECONDS)
@@ -1316,13 +1337,13 @@ const startVoiceReplyRecording = async (postId: string) => {
     setVoiceReplyErrorByPostId((prev) => ({ ...prev, [postId]: '' }))
     setVoiceReplyNoticeByPostId((prev) => ({ ...prev, [postId]: '' }))
     clearVoiceReplyForPost(postId)
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: RECORDING_AUDIO_CONSTRAINTS })
     const recorder = createPreferredMediaRecorder(stream)
     voiceReplyMediaStreamRef.current = stream
     voiceReplyMediaRecorderRef.current = recorder
     voiceReplyChunksRef.current = []
     voiceReplySizeBytesRef.current = 0
-    voiceReplyStartAtRef.current = Date.now()
+    voiceReplyStartAtRef.current = null
     setVoiceReplyRecordingPostId(postId)
     setVoiceReplyRecordingSecondsByPostId((prev) => ({ ...prev, [postId]: 0 }))
     isStoppingVoiceReplyRecorderRef.current = false
@@ -1359,6 +1380,20 @@ const startVoiceReplyRecording = async (postId: string) => {
       voiceReplyMediaStreamRef.current = null
       isStoppingVoiceReplyRecorderRef.current = false
     }
+    if (RECORDING_START_WARMUP_MS > 0) {
+      await new Promise((resolve) => window.setTimeout(resolve, RECORDING_START_WARMUP_MS))
+    }
+    if (!stream.getAudioTracks().some((track) => track.readyState === 'live')) {
+      voiceReplyMediaRecorderRef.current = null
+      voiceReplyMediaStreamRef.current = null
+      voiceReplyChunksRef.current = []
+      voiceReplySizeBytesRef.current = 0
+      voiceReplyStartAtRef.current = null
+      isStoppingVoiceReplyRecorderRef.current = false
+      setVoiceReplyRecordingPostId((current) => current === postId ? null : current)
+      return
+    }
+    voiceReplyStartAtRef.current = Date.now()
     recorder.start(1000)
     voiceReplyTimerRef.current = window.setInterval(() => {
       const elapsed = Math.floor((Date.now() - (voiceReplyStartAtRef.current ?? Date.now())) / 1000)
