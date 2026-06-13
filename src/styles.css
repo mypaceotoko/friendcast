@@ -1413,7 +1413,7 @@ main.screen{padding-bottom:calc(108px + env(safe-area-inset-bottom));}
   font-size:10px;
   line-height:1.4;
   word-break:break-all;
-  white-space:normal;
+  white-space:pre-line;
 }
 .theme-dark .audio-seek-debug,
 body[data-theme="dark"] .audio-seek-debug{
