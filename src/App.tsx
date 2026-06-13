@@ -646,6 +646,24 @@ const LinkPreviewCard = ({ link, compact = false }: { link: SafeLink; compact?: 
   )
 }
 
+const logAudioSeekDebug = (action: string, context: { postId?: string; commentId?: string; audio: HTMLAudioElement; mimeType?: string | null; storagePath?: string | null; error?: unknown }) => {
+  console.warn('Audio seek debug', {
+    postId: context.postId ?? null,
+    commentId: context.commentId ?? null,
+    action,
+    currentTime: context.audio.currentTime,
+    duration: context.audio.duration,
+    readyState: context.audio.readyState,
+    networkState: context.audio.networkState,
+    paused: context.audio.paused,
+    src: context.audio.currentSrc,
+    mimeType: context.mimeType ?? null,
+    storagePath: context.storagePath ?? null,
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+    error: context.error
+  })
+}
+
 export function App() {
 const [screen, setScreen] = useState<Screen>('home')
 const [composeText, setComposeText] = useState('')
@@ -2227,6 +2245,7 @@ const renderAudioPlayer = (post: Post) => {
   const elapsedDuration = formatDuration(Math.max(0, Math.floor(currentSeconds)) * 1000)
   const durationLabel = `${elapsedDuration} / ${totalDuration}`
   const canSeek = state === 'ready' && activeAudioPostId === post.id && baseDurationSeconds > 0 && Number.isFinite(baseDurationSeconds)
+  const canStepSeek = state === 'ready' && activeAudioPostId === post.id
   const progressPercent = baseDurationSeconds > 0 ? Math.min(100, Math.max(0, (currentSeconds / baseDurationSeconds) * 100)) : 0
   const clampTime = (value: number, duration: number) => Math.min(Math.max(value, 0), duration)
   const updateTimeState = (nextTime: number, nextDuration?: number) => {
@@ -2239,27 +2258,30 @@ const renderAudioPlayer = (post: Post) => {
   const seekToRatio = (ratio: number) => {
     const audio = playAudioRef.current
     if (!audio || activeAudioPostId !== post.id) return
-    const duration = audio.duration
-    if (!Number.isFinite(duration) || duration <= 0) return
+    const rawDuration = audio.duration
+    const duration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : (baseDurationSeconds > 0 ? baseDurationSeconds : null)
+    if (!duration) return
     const nextTime = clampTime(ratio * duration, duration)
     try {
       audio.currentTime = nextTime
-      updateTimeState(nextTime, duration)
+      updateTimeState(nextTime, rawDuration)
     } catch (error) {
-      console.error('audio seek failed', error)
+      logAudioSeekDebug('seek-ratio', { postId: post.id, audio, mimeType: post.audioAsset?.mime_type, storagePath: post.audioAsset?.storage_path, error })
     }
   }
   const seekBy = (deltaSeconds: number) => {
     const audio = playAudioRef.current
     if (!audio || activeAudioPostId !== post.id) return
-    const duration = audio.duration
-    if (!Number.isFinite(duration) || duration <= 0) return
-    const nextTime = clampTime(audio.currentTime + deltaSeconds, duration)
+    const rawCurrent = audio.currentTime
+    const rawDuration = audio.duration
+    const current = Number.isFinite(rawCurrent) ? rawCurrent : 0
+    const fallbackDuration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : (baseDurationSeconds > 0 ? baseDurationSeconds : null)
+    const nextTime = fallbackDuration ? clampTime(current + deltaSeconds, fallbackDuration) : Math.max(current + deltaSeconds, 0)
     try {
       audio.currentTime = nextTime
-      updateTimeState(nextTime, duration)
+      updateTimeState(nextTime, rawDuration)
     } catch (error) {
-      console.error('audio seek failed', error)
+      logAudioSeekDebug(deltaSeconds > 0 ? 'seek-forward-15' : 'seek-back-15', { postId: post.id, audio, mimeType: post.audioAsset?.mime_type, storagePath: post.audioAsset?.storage_path, error })
     }
   }
   const play = async () => {
@@ -2300,8 +2322,11 @@ const renderAudioPlayer = (post: Post) => {
       previousAudio.onpause = null
       previousAudio.onended = null
       previousAudio.onloadedmetadata = null
+      previousAudio.ondurationchange = null
+      previousAudio.onseeked = null
     }
     const nextAudio = new Audio()
+    nextAudio.preload = 'metadata'
     nextAudio.src = url
     const rawStartAt = audioCurrentTimeMap[post.id] ?? 0
     const startAt = Number.isFinite(rawStartAt) && rawStartAt > 0 ? rawStartAt : 0
@@ -2314,7 +2339,18 @@ const renderAudioPlayer = (post: Post) => {
         updateTimeState(safeStartAt, duration)
       } else {
         updateTimeState(startAt)
+        logAudioSeekDebug('metadata-duration-invalid', { postId: post.id, audio: nextAudio, mimeType: asset.mime_type, storagePath: asset.storage_path })
       }
+    }
+    nextAudio.ondurationchange = () => {
+      const duration = nextAudio.duration
+      if (Number.isFinite(duration) && duration > 0) {
+        setAudioDurationMap((prev) => ({ ...prev, [post.id]: duration }))
+      }
+    }
+    nextAudio.onseeked = () => {
+      const current = nextAudio.currentTime
+      updateTimeState(Number.isFinite(current) ? current : 0, nextAudio.duration)
     }
     nextAudio.ontimeupdate = () => {
       const current = nextAudio.currentTime
@@ -2349,7 +2385,7 @@ const renderAudioPlayer = (post: Post) => {
     }
   }
   const hasPlayableAsset = Boolean(post.audioAsset?.storage_path && post.audioAsset?.storage_bucket)
-  return <div className={`audio-card ${isPlaying ? 'is-active' : ''}`}><button className="audio-play audio-play-button" type="button" onClick={(event) => { event.stopPropagation(); void play() }} disabled={!hasPlayableAsset}><span className={`play-icon ${isPlaying ? 'is-stop' : ''}`}>{isPlaying ? '■' : '▷'}</span></button><div className="audio-main"><button type="button" className={`audio-wave ${isPlaying ? 'playing' : ''}`} onClick={(event) => { event.stopPropagation(); if (!canSeek) return; const rect = event.currentTarget.getBoundingClientRect(); const ratio = (event.clientX - rect.left) / rect.width; seekToRatio(Math.min(1, Math.max(0, ratio))) }} disabled={!canSeek} aria-label="波形をタップして再生位置を移動">{Array.from({ length: 18 }).map((_, i) => <i key={i} className={progressPercent >= ((i + 1) / 18) * 100 ? 'is-past' : ''} style={{ height: `${8 + ((i % 6) * 4)}px`, animationDelay: `${i * 0.05}s` }} />)}</button><div className="audio-meta-row"><span className="audio-duration">{durationLabel}</span>{isPlaying && <small className="audio-playing-label">再生中</small>}</div><div className="audio-seek-row"><button type="button" className="audio-seek-step" onClick={(event) => { event.stopPropagation(); seekBy(-15) }} disabled={!canSeek}>-15秒</button><button type="button" className="audio-speed-btn" onClick={(event) => { event.stopPropagation(); cycleGlobalPlaybackRate() }} aria-label={`再生速度 ${audioPlaybackRate.toFixed(1)}倍`}>{audioPlaybackRate.toFixed(1)}x</button><button type="button" className="audio-seek-step" onClick={(event) => { event.stopPropagation(); seekBy(15) }} disabled={!canSeek}>+15秒</button></div>{!canSeek && state === 'loading' && <small>再生準備中です...</small>}</div>{state === 'loading' && <small>読み込み中...</small>}{audioLoadError[post.id] && <small className="status-error">{audioLoadError[post.id]}</small>}</div>
+  return <div className={`audio-card ${isPlaying ? 'is-active' : ''}`}><button className="audio-play audio-play-button" type="button" onClick={(event) => { event.stopPropagation(); void play() }} disabled={!hasPlayableAsset}><span className={`play-icon ${isPlaying ? 'is-stop' : ''}`}>{isPlaying ? '■' : '▷'}</span></button><div className="audio-main"><button type="button" className={`audio-wave ${isPlaying ? 'playing' : ''}`} onClick={(event) => { event.stopPropagation(); if (!canSeek) return; const rect = event.currentTarget.getBoundingClientRect(); const ratio = (event.clientX - rect.left) / rect.width; seekToRatio(Math.min(1, Math.max(0, ratio))) }} disabled={!canSeek} aria-label="波形をタップして再生位置を移動">{Array.from({ length: 18 }).map((_, i) => <i key={i} className={progressPercent >= ((i + 1) / 18) * 100 ? 'is-past' : ''} style={{ height: `${8 + ((i % 6) * 4)}px`, animationDelay: `${i * 0.05}s` }} />)}</button><div className="audio-meta-row"><span className="audio-duration">{durationLabel}</span>{isPlaying && <small className="audio-playing-label">再生中</small>}</div><div className="audio-seek-row"><button type="button" className="audio-seek-step" onClick={(event) => { event.stopPropagation(); seekBy(-15) }} disabled={!canStepSeek}>-15秒</button><button type="button" className="audio-speed-btn" onClick={(event) => { event.stopPropagation(); cycleGlobalPlaybackRate() }} aria-label={`再生速度 ${audioPlaybackRate.toFixed(1)}倍`}>{audioPlaybackRate.toFixed(1)}x</button><button type="button" className="audio-seek-step" onClick={(event) => { event.stopPropagation(); seekBy(15) }} disabled={!canStepSeek}>+15秒</button></div>{!canSeek && state === 'loading' && <small>再生準備中です...</small>}</div>{state === 'loading' && <small>読み込み中...</small>}{audioLoadError[post.id] && <small className="status-error">{audioLoadError[post.id]}</small>}</div>
 }
 
 const getAvatarInitial = (name: string) => name.slice(0, 1).toUpperCase()
@@ -2932,6 +2968,8 @@ function stopVoiceCommentPlayback(resetTime = false) {
     audio.onended = null
     audio.ontimeupdate = null
     audio.onloadedmetadata = null
+    audio.ondurationchange = null
+    audio.onseeked = null
     audio.onerror = null
     if (resetTime) audio.currentTime = 0
   }
@@ -2951,8 +2989,24 @@ const toggleVoiceCommentPlay = async (comment: CommentRow) => {
   try {
     const audio = new Audio(audioUrl)
     voiceCommentAudioRef.current = audio
+    audio.preload = 'metadata'
     audio.playbackRate = audioPlaybackRate
-    audio.onloadedmetadata = () => setVoiceCommentDurationById((prev) => ({ ...prev, [commentId]: Number.isFinite(audio.duration) ? audio.duration : (comment.audio_duration_seconds ?? 0) }))
+    audio.onloadedmetadata = () => {
+      const duration = audio.duration
+      if (Number.isFinite(duration) && duration > 0) {
+        setVoiceCommentDurationById((prev) => ({ ...prev, [commentId]: duration }))
+      } else {
+        setVoiceCommentDurationById((prev) => ({ ...prev, [commentId]: comment.audio_duration_seconds ?? 0 }))
+        logAudioSeekDebug('metadata-duration-invalid', { commentId, audio, storagePath: audioUrl })
+      }
+    }
+    audio.ondurationchange = () => {
+      const duration = audio.duration
+      if (Number.isFinite(duration) && duration > 0) {
+        setVoiceCommentDurationById((prev) => ({ ...prev, [commentId]: duration }))
+      }
+    }
+    audio.onseeked = () => setVoiceCommentCurrentTimeById((prev) => ({ ...prev, [commentId]: audio.currentTime }))
     audio.ontimeupdate = () => setVoiceCommentCurrentTimeById((prev) => ({ ...prev, [commentId]: audio.currentTime }))
     audio.onended = () => {
       setVoiceCommentCurrentTimeById((prev) => ({ ...prev, [commentId]: 0 }))
@@ -2972,21 +3026,32 @@ const toggleVoiceCommentPlay = async (comment: CommentRow) => {
 const seekVoiceCommentToRatio = (commentId: string, ratio: number) => {
   const audio = voiceCommentAudioRef.current
   if (!audio || playingVoiceCommentId !== commentId) return
-  const duration = audio.duration
-  if (!Number.isFinite(duration) || duration <= 0) return
+  const rawDuration = audio.duration
+  const duration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : (voiceCommentDurationById[commentId] ?? 0)
+  if (!(duration > 0)) return
   const nextTime = Math.min(duration, Math.max(0, ratio * duration))
-  audio.currentTime = nextTime
-  setVoiceCommentCurrentTimeById((prev) => ({ ...prev, [commentId]: nextTime }))
+  try {
+    audio.currentTime = nextTime
+    setVoiceCommentCurrentTimeById((prev) => ({ ...prev, [commentId]: nextTime }))
+  } catch (error) {
+    logAudioSeekDebug('seek-ratio', { commentId, audio, storagePath: audio.currentSrc, error })
+  }
 }
 
 const seekVoiceCommentBy = (commentId: string, deltaSeconds: number) => {
   const audio = voiceCommentAudioRef.current
   if (!audio || playingVoiceCommentId !== commentId) return
-  const duration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : (voiceCommentDurationById[commentId] ?? 0)
-  if (!Number.isFinite(duration) || duration <= 0) return
-  const nextTime = Math.min(duration, Math.max(0, audio.currentTime + deltaSeconds))
-  audio.currentTime = nextTime
-  setVoiceCommentCurrentTimeById((prev) => ({ ...prev, [commentId]: nextTime }))
+  const rawCurrent = audio.currentTime
+  const rawDuration = audio.duration
+  const current = Number.isFinite(rawCurrent) ? rawCurrent : 0
+  const fallbackDuration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : (voiceCommentDurationById[commentId] ?? 0)
+  const nextTime = fallbackDuration > 0 ? Math.min(fallbackDuration, Math.max(0, current + deltaSeconds)) : Math.max(0, current + deltaSeconds)
+  try {
+    audio.currentTime = nextTime
+    setVoiceCommentCurrentTimeById((prev) => ({ ...prev, [commentId]: nextTime }))
+  } catch (error) {
+    logAudioSeekDebug(deltaSeconds > 0 ? 'seek-forward-15' : 'seek-back-15', { commentId, audio, storagePath: audio.currentSrc, error })
+  }
 }
 
 
