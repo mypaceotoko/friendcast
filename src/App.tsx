@@ -664,6 +664,38 @@ const logAudioSeekDebug = (action: string, context: { postId?: string; commentId
   })
 }
 
+const logAudioStepSeekAttempt = (info: {
+  kind: 'post' | 'comment'
+  action: 'forward-15' | 'back-15'
+  id: string
+  audio: HTMLAudioElement | null
+  currentTime: number
+  nativeDuration: number
+  savedDuration: number | null
+  effectiveDuration: number | null
+  nextTime: number
+  mimeType?: string | null
+  storagePath?: string | null
+}) => {
+  console.warn('Audio step seek attempt', {
+    kind: info.kind,
+    action: info.action,
+    id: info.id,
+    hasAudioElement: !!info.audio,
+    currentTime: info.currentTime,
+    nativeDuration: info.nativeDuration,
+    savedDuration: info.savedDuration,
+    effectiveDuration: info.effectiveDuration,
+    nextTime: info.nextTime,
+    readyState: info.audio?.readyState ?? null,
+    networkState: info.audio?.networkState ?? null,
+    paused: info.audio?.paused ?? null,
+    mimeType: info.mimeType ?? null,
+    storagePath: info.storagePath ?? null,
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : ''
+  })
+}
+
 export function App() {
 const [screen, setScreen] = useState<Screen>('home')
 const [composeText, setComposeText] = useState('')
@@ -2271,12 +2303,27 @@ const renderAudioPlayer = (post: Post) => {
   }
   const seekBy = (deltaSeconds: number) => {
     const audio = playAudioRef.current
-    if (!audio || activeAudioPostId !== post.id) return
-    const rawCurrent = audio.currentTime
-    const rawDuration = audio.duration
+    const action = deltaSeconds > 0 ? 'forward-15' : 'back-15'
+    const rawCurrent = audio?.currentTime ?? 0
+    const rawDuration = audio?.duration ?? NaN
     const current = Number.isFinite(rawCurrent) ? rawCurrent : 0
-    const fallbackDuration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : (baseDurationSeconds > 0 ? baseDurationSeconds : null)
+    const savedDuration = baseDurationSeconds > 0 ? baseDurationSeconds : null
+    const fallbackDuration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : savedDuration
     const nextTime = fallbackDuration ? clampTime(current + deltaSeconds, fallbackDuration) : Math.max(current + deltaSeconds, 0)
+    logAudioStepSeekAttempt({
+      kind: 'post',
+      action,
+      id: post.id,
+      audio,
+      currentTime: rawCurrent,
+      nativeDuration: rawDuration,
+      savedDuration,
+      effectiveDuration: fallbackDuration,
+      nextTime,
+      mimeType: post.audioAsset?.mime_type,
+      storagePath: post.audioAsset?.storage_path
+    })
+    if (!audio || activeAudioPostId !== post.id) return
     try {
       audio.currentTime = nextTime
       updateTimeState(nextTime, rawDuration)
@@ -3040,12 +3087,26 @@ const seekVoiceCommentToRatio = (commentId: string, ratio: number) => {
 
 const seekVoiceCommentBy = (commentId: string, deltaSeconds: number) => {
   const audio = voiceCommentAudioRef.current
-  if (!audio || playingVoiceCommentId !== commentId) return
-  const rawCurrent = audio.currentTime
-  const rawDuration = audio.duration
+  const action = deltaSeconds > 0 ? 'forward-15' : 'back-15'
+  const rawCurrent = audio?.currentTime ?? 0
+  const rawDuration = audio?.duration ?? NaN
   const current = Number.isFinite(rawCurrent) ? rawCurrent : 0
-  const fallbackDuration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : (voiceCommentDurationById[commentId] ?? 0)
-  const nextTime = fallbackDuration > 0 ? Math.min(fallbackDuration, Math.max(0, current + deltaSeconds)) : Math.max(0, current + deltaSeconds)
+  const savedDuration = voiceCommentDurationById[commentId] > 0 ? voiceCommentDurationById[commentId] : null
+  const fallbackDuration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : savedDuration
+  const nextTime = fallbackDuration ? Math.min(fallbackDuration, Math.max(0, current + deltaSeconds)) : Math.max(0, current + deltaSeconds)
+  logAudioStepSeekAttempt({
+    kind: 'comment',
+    action,
+    id: commentId,
+    audio,
+    currentTime: rawCurrent,
+    nativeDuration: rawDuration,
+    savedDuration,
+    effectiveDuration: fallbackDuration,
+    nextTime,
+    storagePath: audio?.currentSrc
+  })
+  if (!audio || playingVoiceCommentId !== commentId) return
   try {
     audio.currentTime = nextTime
     setVoiceCommentCurrentTimeById((prev) => ({ ...prev, [commentId]: nextTime }))
