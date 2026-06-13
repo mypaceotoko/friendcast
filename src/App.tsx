@@ -136,6 +136,33 @@ const AUDIO_EXTENSION_BY_MIME_TYPE: Record<string, UploadAudioExtension> = {
 }
 const UPLOAD_AUDIO_ACCEPT = '.m4a,.mp3,.webm,.wav,.aac,audio/mp4,audio/mpeg,audio/webm,audio/wav,audio/x-wav,audio/aac,video/webm'
 const VOICE_POSTS_BUCKET = 'voice-posts'
+
+// MediaRecorderの既定mimeTypeはブラウザ依存（Android Chrome/Brave: audio/webm;codecs=opus, iOS Safari: audio/mp4）。
+// isTypeSupportedで対応形式を確認し、既存の既定挙動と同じ優先形式を明示指定することで recorder.mimeType を安定させる。
+const PREFERRED_RECORDING_MIME_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/aac']
+
+const getPreferredRecordingMimeType = (): string | undefined => {
+  if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') return undefined
+  return PREFERRED_RECORDING_MIME_TYPES.find((type) => {
+    try {
+      return MediaRecorder.isTypeSupported(type)
+    } catch {
+      return false
+    }
+  })
+}
+
+const createPreferredMediaRecorder = (stream: MediaStream) => {
+  const preferredMimeType = getPreferredRecordingMimeType()
+  if (preferredMimeType) {
+    try {
+      return new MediaRecorder(stream, { mimeType: preferredMimeType })
+    } catch {
+      // フォールバック: 明示指定が拒否された場合はブラウザ既定に委ねる
+    }
+  }
+  return new MediaRecorder(stream)
+}
 const BUILD_INFO_URL = '/build-info.json'
 const BUILD_INFO_CHECK_INTERVAL_MS = 5 * 60 * 1000
 const MAX_VOICE_REPLY_SECONDS = MAX_BROWSER_RECORDING_SECONDS
@@ -646,6 +673,122 @@ const LinkPreviewCard = ({ link, compact = false }: { link: SafeLink; compact?: 
   )
 }
 
+const logAudioSeekDebug = (action: string, context: { postId?: string; commentId?: string; audio: HTMLAudioElement; mimeType?: string | null; storagePath?: string | null; error?: unknown }) => {
+  console.warn('Audio seek debug', {
+    postId: context.postId ?? null,
+    commentId: context.commentId ?? null,
+    action,
+    currentTime: context.audio.currentTime,
+    duration: context.audio.duration,
+    readyState: context.audio.readyState,
+    networkState: context.audio.networkState,
+    paused: context.audio.paused,
+    src: context.audio.currentSrc,
+    mimeType: context.mimeType ?? null,
+    storagePath: context.storagePath ?? null,
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+    error: context.error
+  })
+}
+
+const logAudioStepSeekAttempt = (info: {
+  kind: 'post' | 'comment'
+  action: 'forward-15' | 'back-15'
+  id: string
+  audio: HTMLAudioElement | null
+  currentTime: number
+  nativeDuration: number
+  savedDuration: number | null
+  effectiveDuration: number | null
+  nextTime: number
+  mimeType?: string | null
+  storagePath?: string | null
+}) => {
+  console.warn('Audio step seek attempt', {
+    kind: info.kind,
+    action: info.action,
+    id: info.id,
+    hasAudioElement: !!info.audio,
+    currentTime: info.currentTime,
+    nativeDuration: info.nativeDuration,
+    savedDuration: info.savedDuration,
+    effectiveDuration: info.effectiveDuration,
+    nextTime: info.nextTime,
+    readyState: info.audio?.readyState ?? null,
+    networkState: info.audio?.networkState ?? null,
+    paused: info.audio?.paused ?? null,
+    mimeType: info.mimeType ?? null,
+    storagePath: info.storagePath ?? null,
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : ''
+  })
+}
+
+const AUDIO_SEEK_DEBUG_BUILD = 'debug-v2'
+
+type AudioSeekDebugEntry = {
+  pressed: boolean
+  build: string
+  kind: 'post' | 'comment'
+  action: string
+  targetId: string
+  hasAudioElement: boolean
+  currentTime: number | null
+  duration: number | null
+  paused: boolean | null
+  readyState: number | null
+  networkState: number | null
+  note?: string
+  mimeType?: string | null
+  extension?: UploadAudioExtension | null
+  nativeDuration?: number | null
+  savedDuration?: number | null
+  before?: number | null
+  nextTime?: number | null
+  afterImmediate?: number | null
+  afterDelay?: number | null
+  afterRetry?: number | null
+  ignored?: boolean | null
+}
+
+const buildDefaultAudioSeekDebugEntry = (kind: 'post' | 'comment', targetId: string, audio: HTMLAudioElement | null, note?: string): AudioSeekDebugEntry => ({
+  pressed: false,
+  build: AUDIO_SEEK_DEBUG_BUILD,
+  kind,
+  action: '-',
+  targetId,
+  hasAudioElement: !!audio,
+  currentTime: audio ? audio.currentTime : null,
+  duration: audio ? audio.duration : null,
+  paused: audio ? audio.paused : null,
+  readyState: audio ? audio.readyState : null,
+  networkState: audio ? audio.networkState : null,
+  note
+})
+
+const formatAudioSeekDebug = (entry: AudioSeekDebugEntry) => {
+  const fmt = (value: number | null | undefined) => (value === null || value === undefined ? '-' : (Number.isFinite(value) ? value.toFixed(2) : String(value)))
+  const lines = [
+    'Audio Debug',
+    `build: ${entry.build}`,
+    `pressed: ${entry.pressed}`,
+    `action: ${entry.action}`,
+    `kind: ${entry.kind}`,
+    `targetId: ${entry.targetId}`,
+    `hasAudioElement: ${entry.hasAudioElement}`,
+    `currentTime: ${fmt(entry.currentTime)}`,
+    `duration: ${fmt(entry.duration)}`,
+    `readyState: ${entry.readyState ?? '-'} networkState: ${entry.networkState ?? '-'} paused: ${entry.paused ?? '-'}`
+  ]
+  if (entry.note) lines.push(entry.note)
+  if (entry.nextTime !== undefined) {
+    lines.push(`mime: ${entry.mimeType ?? '-'} ext: ${entry.extension ?? '-'}`)
+    lines.push(`native: ${fmt(entry.nativeDuration)} saved: ${fmt(entry.savedDuration)}`)
+    lines.push(`before: ${fmt(entry.before)} next: ${fmt(entry.nextTime)}`)
+    lines.push(`afterImm: ${fmt(entry.afterImmediate)} afterDelay: ${fmt(entry.afterDelay)}${entry.ignored ? ' [IGNORED?]' : ''}`)
+  }
+  return lines.join('\n')
+}
+
 export function App() {
 const [screen, setScreen] = useState<Screen>('home')
 const [composeText, setComposeText] = useState('')
@@ -700,6 +843,7 @@ const [audioUrlMap, setAudioUrlMap] = useState<Record<string, string>>({})
 const [audioLoadState, setAudioLoadState] = useState<Record<string, 'idle' | 'loading' | 'ready' | 'error'>>({})
 const [audioLoadError, setAudioLoadError] = useState<Record<string, string>>({})
 const [audioDownloadPendingPostId, setAudioDownloadPendingPostId] = useState<string | null>(null)
+const [audioSeekDebugById, setAudioSeekDebugById] = useState<Record<string, AudioSeekDebugEntry>>({})
 const playbackRateOptions = [1.0, 1.2, 1.5, 2.0] as const
 const [audioPlaybackRate, setAudioPlaybackRate] = useState<number>(1.2)
 const [closeFriendIds, setCloseFriendIds] = useState<Set<string>>(new Set())
@@ -1015,7 +1159,7 @@ const startRecording = async () => {
     chunksRef.current = []
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     mediaStreamRef.current = stream
-    const recorder = new MediaRecorder(stream)
+    const recorder = createPreferredMediaRecorder(stream)
     mediaRecorderRef.current = recorder
     recorder.ondataavailable = (event) => {
       if (event.data.size <= 0) return
@@ -1232,7 +1376,7 @@ const startVoiceReplyRecording = async (postId: string) => {
     setVoiceReplyNoticeByPostId((prev) => ({ ...prev, [postId]: '' }))
     clearVoiceReplyForPost(postId)
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    const recorder = new MediaRecorder(stream)
+    const recorder = createPreferredMediaRecorder(stream)
     voiceReplyMediaStreamRef.current = stream
     voiceReplyMediaRecorderRef.current = recorder
     voiceReplyChunksRef.current = []
@@ -2227,6 +2371,7 @@ const renderAudioPlayer = (post: Post) => {
   const elapsedDuration = formatDuration(Math.max(0, Math.floor(currentSeconds)) * 1000)
   const durationLabel = `${elapsedDuration} / ${totalDuration}`
   const canSeek = state === 'ready' && activeAudioPostId === post.id && baseDurationSeconds > 0 && Number.isFinite(baseDurationSeconds)
+  const canStepSeek = state === 'ready' && activeAudioPostId === post.id
   const progressPercent = baseDurationSeconds > 0 ? Math.min(100, Math.max(0, (currentSeconds / baseDurationSeconds) * 100)) : 0
   const clampTime = (value: number, duration: number) => Math.min(Math.max(value, 0), duration)
   const updateTimeState = (nextTime: number, nextDuration?: number) => {
@@ -2239,28 +2384,59 @@ const renderAudioPlayer = (post: Post) => {
   const seekToRatio = (ratio: number) => {
     const audio = playAudioRef.current
     if (!audio || activeAudioPostId !== post.id) return
-    const duration = audio.duration
-    if (!Number.isFinite(duration) || duration <= 0) return
+    const rawDuration = audio.duration
+    const savedDuration = baseDurationSeconds > 0 ? baseDurationSeconds : null
+    const duration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : savedDuration
+    if (!duration) return
     const nextTime = clampTime(ratio * duration, duration)
-    try {
-      audio.currentTime = nextTime
-      updateTimeState(nextTime, duration)
-    } catch (error) {
-      console.error('audio seek failed', error)
-    }
+    verifyAudioSeek({
+      key: post.id,
+      kind: 'post',
+      action: 'seek-ratio',
+      audio,
+      nextTime,
+      nativeDuration: rawDuration,
+      savedDuration,
+      mimeType: post.audioAsset?.mime_type,
+      storagePath: post.audioAsset?.storage_path,
+      onImmediateUpdate: (time) => updateTimeState(time, rawDuration)
+    })
   }
   const seekBy = (deltaSeconds: number) => {
     const audio = playAudioRef.current
+    const action = deltaSeconds > 0 ? 'forward-15' : 'back-15'
+    const rawCurrent = audio?.currentTime ?? 0
+    const rawDuration = audio?.duration ?? NaN
+    const current = Number.isFinite(rawCurrent) ? rawCurrent : 0
+    const savedDuration = baseDurationSeconds > 0 ? baseDurationSeconds : null
+    const fallbackDuration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : savedDuration
+    const nextTime = fallbackDuration ? clampTime(current + deltaSeconds, fallbackDuration) : Math.max(current + deltaSeconds, 0)
+    logAudioStepSeekAttempt({
+      kind: 'post',
+      action,
+      id: post.id,
+      audio,
+      currentTime: rawCurrent,
+      nativeDuration: rawDuration,
+      savedDuration,
+      effectiveDuration: fallbackDuration,
+      nextTime,
+      mimeType: post.audioAsset?.mime_type,
+      storagePath: post.audioAsset?.storage_path
+    })
     if (!audio || activeAudioPostId !== post.id) return
-    const duration = audio.duration
-    if (!Number.isFinite(duration) || duration <= 0) return
-    const nextTime = clampTime(audio.currentTime + deltaSeconds, duration)
-    try {
-      audio.currentTime = nextTime
-      updateTimeState(nextTime, duration)
-    } catch (error) {
-      console.error('audio seek failed', error)
-    }
+    verifyAudioSeek({
+      key: post.id,
+      kind: 'post',
+      action,
+      audio,
+      nextTime,
+      nativeDuration: rawDuration,
+      savedDuration,
+      mimeType: post.audioAsset?.mime_type,
+      storagePath: post.audioAsset?.storage_path,
+      onImmediateUpdate: (time) => updateTimeState(time, rawDuration)
+    })
   }
   const play = async () => {
     const asset = post.audioAsset
@@ -2300,8 +2476,11 @@ const renderAudioPlayer = (post: Post) => {
       previousAudio.onpause = null
       previousAudio.onended = null
       previousAudio.onloadedmetadata = null
+      previousAudio.ondurationchange = null
+      previousAudio.onseeked = null
     }
     const nextAudio = new Audio()
+    nextAudio.preload = 'metadata'
     nextAudio.src = url
     const rawStartAt = audioCurrentTimeMap[post.id] ?? 0
     const startAt = Number.isFinite(rawStartAt) && rawStartAt > 0 ? rawStartAt : 0
@@ -2314,7 +2493,18 @@ const renderAudioPlayer = (post: Post) => {
         updateTimeState(safeStartAt, duration)
       } else {
         updateTimeState(startAt)
+        logAudioSeekDebug('metadata-duration-invalid', { postId: post.id, audio: nextAudio, mimeType: asset.mime_type, storagePath: asset.storage_path })
       }
+    }
+    nextAudio.ondurationchange = () => {
+      const duration = nextAudio.duration
+      if (Number.isFinite(duration) && duration > 0) {
+        setAudioDurationMap((prev) => ({ ...prev, [post.id]: duration }))
+      }
+    }
+    nextAudio.onseeked = () => {
+      const current = nextAudio.currentTime
+      updateTimeState(Number.isFinite(current) ? current : 0, nextAudio.duration)
     }
     nextAudio.ontimeupdate = () => {
       const current = nextAudio.currentTime
@@ -2349,7 +2539,7 @@ const renderAudioPlayer = (post: Post) => {
     }
   }
   const hasPlayableAsset = Boolean(post.audioAsset?.storage_path && post.audioAsset?.storage_bucket)
-  return <div className={`audio-card ${isPlaying ? 'is-active' : ''}`}><button className="audio-play audio-play-button" type="button" onClick={(event) => { event.stopPropagation(); void play() }} disabled={!hasPlayableAsset}><span className={`play-icon ${isPlaying ? 'is-stop' : ''}`}>{isPlaying ? '■' : '▷'}</span></button><div className="audio-main"><button type="button" className={`audio-wave ${isPlaying ? 'playing' : ''}`} onClick={(event) => { event.stopPropagation(); if (!canSeek) return; const rect = event.currentTarget.getBoundingClientRect(); const ratio = (event.clientX - rect.left) / rect.width; seekToRatio(Math.min(1, Math.max(0, ratio))) }} disabled={!canSeek} aria-label="波形をタップして再生位置を移動">{Array.from({ length: 18 }).map((_, i) => <i key={i} className={progressPercent >= ((i + 1) / 18) * 100 ? 'is-past' : ''} style={{ height: `${8 + ((i % 6) * 4)}px`, animationDelay: `${i * 0.05}s` }} />)}</button><div className="audio-meta-row"><span className="audio-duration">{durationLabel}</span>{isPlaying && <small className="audio-playing-label">再生中</small>}</div><div className="audio-seek-row"><button type="button" className="audio-seek-step" onClick={(event) => { event.stopPropagation(); seekBy(-15) }} disabled={!canSeek}>-15秒</button><button type="button" className="audio-speed-btn" onClick={(event) => { event.stopPropagation(); cycleGlobalPlaybackRate() }} aria-label={`再生速度 ${audioPlaybackRate.toFixed(1)}倍`}>{audioPlaybackRate.toFixed(1)}x</button><button type="button" className="audio-seek-step" onClick={(event) => { event.stopPropagation(); seekBy(15) }} disabled={!canSeek}>+15秒</button></div>{!canSeek && state === 'loading' && <small>再生準備中です...</small>}</div>{state === 'loading' && <small>読み込み中...</small>}{audioLoadError[post.id] && <small className="status-error">{audioLoadError[post.id]}</small>}</div>
+  return <div className={`audio-card ${isPlaying ? 'is-active' : ''}`}><button className="audio-play audio-play-button" type="button" onClick={(event) => { event.stopPropagation(); void play() }} disabled={!hasPlayableAsset}><span className={`play-icon ${isPlaying ? 'is-stop' : ''}`}>{isPlaying ? '■' : '▷'}</span></button><div className="audio-main"><button type="button" className={`audio-wave ${isPlaying ? 'playing' : ''}`} onClick={(event) => { event.stopPropagation(); markAudioDebugPressed(post.id, 'post', 'seek-ratio', playAudioRef.current, `state=${state} canSeek=${canSeek} canStepSeek=${canStepSeek}`); if (!canSeek) return; const rect = event.currentTarget.getBoundingClientRect(); const ratio = (event.clientX - rect.left) / rect.width; seekToRatio(Math.min(1, Math.max(0, ratio))) }} disabled={!canSeek} aria-label="波形をタップして再生位置を移動">{Array.from({ length: 18 }).map((_, i) => <i key={i} className={progressPercent >= ((i + 1) / 18) * 100 ? 'is-past' : ''} style={{ height: `${8 + ((i % 6) * 4)}px`, animationDelay: `${i * 0.05}s` }} />)}</button><div className="audio-meta-row"><span className="audio-duration">{durationLabel}</span>{isPlaying && <small className="audio-playing-label">再生中</small>}</div><div className="audio-seek-row"><button type="button" className="audio-seek-step" onClick={(event) => { event.stopPropagation(); markAudioDebugPressed(post.id, 'post', 'back-15', playAudioRef.current, `state=${state} canSeek=${canSeek} canStepSeek=${canStepSeek}`); seekBy(-15) }} disabled={!canStepSeek}>-15秒</button><button type="button" className="audio-speed-btn" onClick={(event) => { event.stopPropagation(); cycleGlobalPlaybackRate() }} aria-label={`再生速度 ${audioPlaybackRate.toFixed(1)}倍`}>{audioPlaybackRate.toFixed(1)}x</button><button type="button" className="audio-seek-step" onClick={(event) => { event.stopPropagation(); markAudioDebugPressed(post.id, 'post', 'forward-15', playAudioRef.current, `state=${state} canSeek=${canSeek} canStepSeek=${canStepSeek}`); seekBy(15) }} disabled={!canStepSeek}>+15秒</button></div><div className="audio-seek-debug">{formatAudioSeekDebug(audioSeekDebugById[post.id] ?? buildDefaultAudioSeekDebugEntry('post', post.id, playAudioRef.current, `state=${state} canSeek=${canSeek} canStepSeek=${canStepSeek}`))}</div>{!canSeek && state === 'loading' && <small>再生準備中です...</small>}</div>{state === 'loading' && <small>読み込み中...</small>}{audioLoadError[post.id] && <small className="status-error">{audioLoadError[post.id]}</small>}</div>
 }
 
 const getAvatarInitial = (name: string) => name.slice(0, 1).toUpperCase()
@@ -2925,6 +3115,111 @@ const handleDeleteComment = async (postId: string, comment: CommentRow) => {
 }
 
 
+function verifyAudioSeek(params: {
+  key: string
+  kind: 'post' | 'comment'
+  action: string
+  audio: HTMLAudioElement
+  nextTime: number
+  nativeDuration: number
+  savedDuration: number | null
+  mimeType?: string | null
+  storagePath?: string | null
+  onImmediateUpdate: (time: number) => void
+}) {
+  const { key, kind, action, audio, nextTime, nativeDuration, savedDuration, mimeType, storagePath, onImmediateUpdate } = params
+  const before = audio.currentTime
+  try {
+    audio.currentTime = nextTime
+  } catch (error) {
+    logAudioSeekDebug(action, { postId: kind === 'post' ? key : undefined, commentId: kind === 'comment' ? key : undefined, audio, mimeType, storagePath, error })
+  }
+  const afterImmediate = audio.currentTime
+  onImmediateUpdate(Number.isFinite(afterImmediate) ? afterImmediate : nextTime)
+  const entry: AudioSeekDebugEntry = {
+    pressed: true,
+    build: AUDIO_SEEK_DEBUG_BUILD,
+    kind,
+    action,
+    targetId: key,
+    hasAudioElement: true,
+    currentTime: afterImmediate,
+    duration: nativeDuration,
+    paused: audio.paused,
+    readyState: audio.readyState,
+    networkState: audio.networkState,
+    mimeType: mimeType ?? null,
+    extension: getAudioDownloadExtension(mimeType, storagePath),
+    nativeDuration,
+    savedDuration,
+    before,
+    nextTime,
+    afterImmediate,
+    afterDelay: null,
+    afterRetry: null,
+    ignored: null
+  }
+  setAudioSeekDebugById((prev) => ({ ...prev, [key]: { ...prev[key], ...entry } }))
+  window.setTimeout(() => {
+    const afterDelay = audio.currentTime
+    let afterRetry = afterDelay
+    if (Math.abs(afterDelay - nextTime) > 1.5) {
+      try {
+        audio.currentTime = nextTime
+        afterRetry = audio.currentTime
+      } catch (error) {
+        logAudioSeekDebug(action, { postId: kind === 'post' ? key : undefined, commentId: kind === 'comment' ? key : undefined, audio, mimeType, storagePath, error })
+      }
+    }
+    const ignored = Math.abs(afterRetry - nextTime) > 1.5
+    console.warn('Audio seek result', {
+      kind,
+      action,
+      id: key,
+      before,
+      nextTime,
+      afterImmediate,
+      afterDelay,
+      afterRetry,
+      ignored,
+      nativeDuration,
+      savedDuration,
+      mimeType: mimeType ?? null,
+      storagePath: storagePath ?? null,
+      readyState: audio.readyState,
+      networkState: audio.networkState,
+      paused: audio.paused,
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : ''
+    })
+    setAudioSeekDebugById((prev) => {
+      const previousEntry = prev[key]
+      if (!previousEntry) return prev
+      return { ...prev, [key]: { ...previousEntry, afterDelay, afterRetry, ignored, currentTime: afterDelay } }
+    })
+  }, 250)
+}
+
+function markAudioDebugPressed(key: string, kind: 'post' | 'comment', action: string, audio: HTMLAudioElement | null, note?: string) {
+  setAudioSeekDebugById((prev) => ({
+    ...prev,
+    [key]: {
+      ...(prev[key] ?? {}),
+      pressed: true,
+      build: AUDIO_SEEK_DEBUG_BUILD,
+      kind,
+      action,
+      targetId: key,
+      hasAudioElement: !!audio,
+      currentTime: audio ? audio.currentTime : null,
+      duration: audio ? audio.duration : null,
+      paused: audio ? audio.paused : null,
+      readyState: audio ? audio.readyState : null,
+      networkState: audio ? audio.networkState : null,
+      note
+    }
+  }))
+}
+
 function stopVoiceCommentPlayback(resetTime = false) {
   const audio = voiceCommentAudioRef.current
   if (audio) {
@@ -2932,6 +3227,8 @@ function stopVoiceCommentPlayback(resetTime = false) {
     audio.onended = null
     audio.ontimeupdate = null
     audio.onloadedmetadata = null
+    audio.ondurationchange = null
+    audio.onseeked = null
     audio.onerror = null
     if (resetTime) audio.currentTime = 0
   }
@@ -2951,8 +3248,24 @@ const toggleVoiceCommentPlay = async (comment: CommentRow) => {
   try {
     const audio = new Audio(audioUrl)
     voiceCommentAudioRef.current = audio
+    audio.preload = 'metadata'
     audio.playbackRate = audioPlaybackRate
-    audio.onloadedmetadata = () => setVoiceCommentDurationById((prev) => ({ ...prev, [commentId]: Number.isFinite(audio.duration) ? audio.duration : (comment.audio_duration_seconds ?? 0) }))
+    audio.onloadedmetadata = () => {
+      const duration = audio.duration
+      if (Number.isFinite(duration) && duration > 0) {
+        setVoiceCommentDurationById((prev) => ({ ...prev, [commentId]: duration }))
+      } else {
+        setVoiceCommentDurationById((prev) => ({ ...prev, [commentId]: comment.audio_duration_seconds ?? 0 }))
+        logAudioSeekDebug('metadata-duration-invalid', { commentId, audio, storagePath: audioUrl })
+      }
+    }
+    audio.ondurationchange = () => {
+      const duration = audio.duration
+      if (Number.isFinite(duration) && duration > 0) {
+        setVoiceCommentDurationById((prev) => ({ ...prev, [commentId]: duration }))
+      }
+    }
+    audio.onseeked = () => setVoiceCommentCurrentTimeById((prev) => ({ ...prev, [commentId]: audio.currentTime }))
     audio.ontimeupdate = () => setVoiceCommentCurrentTimeById((prev) => ({ ...prev, [commentId]: audio.currentTime }))
     audio.onended = () => {
       setVoiceCommentCurrentTimeById((prev) => ({ ...prev, [commentId]: 0 }))
@@ -2972,21 +3285,57 @@ const toggleVoiceCommentPlay = async (comment: CommentRow) => {
 const seekVoiceCommentToRatio = (commentId: string, ratio: number) => {
   const audio = voiceCommentAudioRef.current
   if (!audio || playingVoiceCommentId !== commentId) return
-  const duration = audio.duration
-  if (!Number.isFinite(duration) || duration <= 0) return
+  const rawDuration = audio.duration
+  const savedDuration = voiceCommentDurationById[commentId] > 0 ? voiceCommentDurationById[commentId] : null
+  const duration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : savedDuration
+  if (!(duration && duration > 0)) return
   const nextTime = Math.min(duration, Math.max(0, ratio * duration))
-  audio.currentTime = nextTime
-  setVoiceCommentCurrentTimeById((prev) => ({ ...prev, [commentId]: nextTime }))
+  verifyAudioSeek({
+    key: `comment:${commentId}`,
+    kind: 'comment',
+    action: 'seek-ratio',
+    audio,
+    nextTime,
+    nativeDuration: rawDuration,
+    savedDuration,
+    storagePath: audio.currentSrc,
+    onImmediateUpdate: (time) => setVoiceCommentCurrentTimeById((prev) => ({ ...prev, [commentId]: time }))
+  })
 }
 
 const seekVoiceCommentBy = (commentId: string, deltaSeconds: number) => {
   const audio = voiceCommentAudioRef.current
+  const action = deltaSeconds > 0 ? 'forward-15' : 'back-15'
+  const rawCurrent = audio?.currentTime ?? 0
+  const rawDuration = audio?.duration ?? NaN
+  const current = Number.isFinite(rawCurrent) ? rawCurrent : 0
+  const savedDuration = voiceCommentDurationById[commentId] > 0 ? voiceCommentDurationById[commentId] : null
+  const fallbackDuration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : savedDuration
+  const nextTime = fallbackDuration ? Math.min(fallbackDuration, Math.max(0, current + deltaSeconds)) : Math.max(0, current + deltaSeconds)
+  logAudioStepSeekAttempt({
+    kind: 'comment',
+    action,
+    id: commentId,
+    audio,
+    currentTime: rawCurrent,
+    nativeDuration: rawDuration,
+    savedDuration,
+    effectiveDuration: fallbackDuration,
+    nextTime,
+    storagePath: audio?.currentSrc
+  })
   if (!audio || playingVoiceCommentId !== commentId) return
-  const duration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : (voiceCommentDurationById[commentId] ?? 0)
-  if (!Number.isFinite(duration) || duration <= 0) return
-  const nextTime = Math.min(duration, Math.max(0, audio.currentTime + deltaSeconds))
-  audio.currentTime = nextTime
-  setVoiceCommentCurrentTimeById((prev) => ({ ...prev, [commentId]: nextTime }))
+  verifyAudioSeek({
+    key: `comment:${commentId}`,
+    kind: 'comment',
+    action,
+    audio,
+    nextTime,
+    nativeDuration: rawDuration,
+    savedDuration,
+    storagePath: audio.currentSrc,
+    onImmediateUpdate: (time) => setVoiceCommentCurrentTimeById((prev) => ({ ...prev, [commentId]: time }))
+  })
 }
 
 
@@ -3029,7 +3378,7 @@ const handleCreateVoiceComment = async (postId: string) => {
   setCommentsErrorMap((prev) => ({ ...prev, [postId]: '' }))
   setVoiceReplySuccessByPostId((prev) => ({ ...prev, [postId]: '' }))
   try {
-    const ext = (blob.type.split('/')[1] || 'webm').replace('x-', '') || 'webm'
+    const ext = getSafeAudioExtension(blob)
     const filePath = `${userId}/comments/${postId}/reply-${Date.now()}.${ext}`
     const contentType = blob.type || 'audio/webm'
 
@@ -3365,7 +3714,7 @@ const loadActivities = async () => {
 const activityMessage = (item: ActivityItem) => item.type === 'comment' ? (item.commentType === 'voice' ? 'あなたの投稿に音声で返信しました' : 'あなたの投稿にコメントしました') : item.type === 'like' ? 'あなたの投稿にいいねしました' : item.type === 'repost' ? 'あなたの投稿をリポストしました' : item.type === 'follow' ? 'あなたをフォローしました' : '招待コードを使いました'
 const activityIcon = (item: ActivityItem) => item.type === 'follow' ? '👤' : item.type === 'comment' ? (item.commentType === 'voice' ? '🎙️' : '💬') : item.type === 'like' ? '❤️' : item.type === 'repost' ? '🔁' : '✨'
 
-const renderTimelinePost = (post: Post, options?: { compact?: boolean; showFollowButton?: boolean; repostMeta?: { repostedBy: Profile; repostedAt: string }; detailed?: boolean }) => { const compact = options?.compact ?? false; const detailed = options?.detailed ?? false; const showFollowButton = options?.showFollowButton ?? false; const repostMeta = options?.repostMeta; const authorProfile = resolvePostAuthor(post); const isOwnPost = post.user_id === session?.user.id; const displayName = authorProfile?.display_name ?? authorProfile?.username ?? 'friendcast user'; const isCommentsOpen = detailed || openedCommentsPostId === post.id; const comments = commentsByPostId[post.id] ?? []; const commentDraft = commentInputMap[post.id] ?? ''; const commentBody = commentDraft.trim(); const isCommentSubmitting = !!commentPostingMap[post.id]; const isVoiceReplyRecordingForPost = voiceReplyRecordingPostId === post.id; const canSubmitComment = !!session?.user && !!post.id && commentBody.length > 0 && commentBody.length <= 140 && !isCommentSubmitting && !isVoiceReplyRecordingForPost; const postLinkPreview = extractFirstUrl(post.text ?? ''); const canDownloadAudio = canDownloadOwnAudioPost(post); const isAudioDownloadPending = audioDownloadPendingPostId === post.id; return <article key={`${post.id}_${repostMeta?.repostedBy.id ?? 'post'}`} className={`post-card tweet-item ${detailed ? 'post-card-detail' : ''}`} role="article">{repostMeta && <button type="button" className="repost-meta" onClick={(event) => { event.stopPropagation(); goToProfile(repostMeta.repostedBy.id) }}>↻ {repostMeta.repostedBy.display_name ?? repostMeta.repostedBy.username}さんがリポストしました ・ {formatDate(repostMeta.repostedAt)}</button>}<div className="post-header"><button className="post-avatar tweet-avatar" onClick={(event) => { event.stopPropagation(); goToProfile(post.user_id) }} style={authorProfile?.avatar_url ? { backgroundImage: `url(${authorProfile.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}>{displayName.slice(0, 1)}</button><div className="post-header-main"><button className="tweet-header author-link tweet-author-link" onClick={(event) => { event.stopPropagation(); goToProfile(post.user_id) }} type="button"><div className="post-user-line"><span className="post-user-name">{displayName}</span></div></button><time className="post-date">{formatDate(post.created_at)}</time></div><div className="post-header-actions">{showFollowButton && !isOwnPost && <button className={`follow-btn ${isFollowing(post.user_id) ? 'is-following' : ''}`} disabled={isFollowPending(post.user_id)} onClick={() => void toggleFollow(post.user_id)} type="button">{isFollowPending(post.user_id) ? '処理中...' : (isFollowing(post.user_id) ? 'フォロー中' : 'フォロー')}</button>}{isOwnPost ? <div className="post-owner-actions"><button type="button" className="visibility-badge visibility-badge-button" onClick={(event) => { event.stopPropagation(); openVisibilityEditor(post) }}><span>{visibilityBadgeIcon[post.visibility]}</span><span>{visibilityComposeLabel[post.visibility]}</span></button><button className="post-delete-btn post-delete-button" type="button" aria-label="投稿を削除" disabled={deletingPostId === post.id} onClick={(event) => { event.stopPropagation(); void handleDeletePost(post) }}>{deletingPostId === post.id ? '…' : '🗑️'}</button></div> : <div className="visibility-badge"><span>{visibilityBadgeIcon[post.visibility]}</span><span>{visibilityComposeLabel[post.visibility]}</span></div>}</div></div><div className="post-content tweet-content">{post.text.trim() && <p className="post-text tweet-text post-text-multiline">{renderTextWithLinks(post.text, `post-${post.id}`)}</p>}{postLinkPreview && <LinkPreviewCard link={postLinkPreview} />}{renderAudioPlayer(post)}{postActionError[post.id] && <p className="inline-error">{postActionError[post.id]}</p>}{!compact && <p className="post-sub-text delivery-inline"><small>{audienceLabel[post.visibility]}に届きます</small></p>}</div><div className="post-actions action-row"><button className="icon-btn" onClick={(event) => { event.stopPropagation(); void toggleCommentsPanel(post.id) }}>💬 <span>{commentsCountMap[post.id] ?? 0}</span></button><button className={`icon-btn like-btn ${isLikedPost(post.id) ? 'active-icon liked' : ''}`} onClick={(event) => { event.stopPropagation(); void togglePostLike(post.id) }} disabled={isLikePending(post.id)} aria-pressed={isLikedPost(post.id)}>{isLikedPost(post.id) ? '♥' : '♡'} <span>{likesCountMap[post.id] ?? 0}</span></button><button className={`icon-btn bookmark-btn ${isPostBookmarked(post.id) ? 'active-icon liked' : ''}`} onClick={(event) => { event.stopPropagation(); void toggleBookmarkPost(post.id) }} aria-pressed={isPostBookmarked(post.id)} aria-label={isPostBookmarked(post.id) ? 'あとで聴くから削除' : 'あとで聴くに保存'}><svg viewBox="0 0 24 24" className="bookmark-icon" aria-hidden="true"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z" fill={isPostBookmarked(post.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg></button>{canDownloadAudio && <button className="icon-btn audio-download-btn" type="button" onClick={(event) => { event.stopPropagation(); void handleDownloadOwnAudio(post) }} disabled={isAudioDownloadPending} aria-label="自分の音声をダウンロード" title="音声を保存"><span aria-hidden="true">⬇️</span><span className="audio-download-label">音声を保存</span></button>}</div>{isCommentsOpen && <section className="comments-panel"><div className="comment-reply-tabs"><button type="button" className={`comment-reply-tab ${(commentReplyModeByPostId[post.id] ?? 'text') === 'text' ? 'active-tab' : ''}`} onClick={(event) => { event.stopPropagation(); setCommentReplyModeByPostId((prev) => ({ ...prev, [post.id]: 'text' })) }}>テキスト</button><button type="button" className={`comment-reply-tab ${(commentReplyModeByPostId[post.id] ?? 'text') === 'voice' ? 'active-tab' : ''}`} onClick={(event) => { event.stopPropagation(); setCommentReplyModeByPostId((prev) => ({ ...prev, [post.id]: 'voice' })) }}>音声</button></div>{(commentReplyModeByPostId[post.id] ?? 'text') === 'text' ? <div className="comment-input-row"><textarea maxLength={140} value={commentDraft} onChange={(event) => setCommentInputMap((prev) => ({ ...prev, [post.id]: event.target.value }))} placeholder="コメントを書く..." className="compose-textarea" rows={2} /><div className="compose-sticky-action"><p className="compose-counter">{commentDraft.length} / 140</p><button className={`compose-post-btn comment-submit-btn ${canSubmitComment ? 'is-enabled' : 'is-disabled'}`} type="button" disabled={!canSubmitComment} aria-disabled={!canSubmitComment} onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (isVoiceReplyRecordingForPost) return; void handleCreateComment(post.id) }}>{isCommentSubmitting ? '送信中...' : '送信'}</button></div></div> : <div className="voice-reply-panel"><p className="status-message">音声で返信（最大20分）</p><p className="status-message">{voiceReplyRecordingPostId === post.id ? `録音中：${formatRecordingTimer(voiceReplyRecordingSecondsByPostId[post.id] ?? 0)} / ${formatRecordingTimer(MAX_BROWSER_RECORDING_SECONDS)}` : (voiceReplyBlobByPostId[post.id] ? `録音済み：${formatDuration(voiceReplyDurationByPostId[post.id] ?? 0)}` : 'まだ録音されていません')}</p>{voiceReplyRecordingPostId === post.id && (voiceReplyRecordingSecondsByPostId[post.id] ?? 0) >= BROWSER_RECORDING_WARNING_SECONDS && <p className="record-limit-warning">まもなく録音上限の20分です。</p>}{voiceReplyPreviewUrlByPostId[post.id] && <div className="voice-reply-preview-box"><p className="voice-reply-preview-time">{formatDuration((voiceReplyPreviewCurrentTimeByPostId[post.id] ?? 0) * 1000)} / {formatDuration(voiceReplyDurationByPostId[post.id] ?? 0)}</p><div className="voice-reply-actions"><button type="button" className="follow-btn" onClick={(event) => { event.stopPropagation(); void playVoiceReplyPreview(post.id) }}>{voiceReplyPreviewPlayingPostId === post.id ? '停止' : '▶ 再生'}</button><button type="button" className="soft-action-button" onClick={(event) => { event.stopPropagation(); clearVoiceReplyForPost(post.id) }} disabled={voiceReplyRecordingPostId === post.id}>再録音</button></div></div>}<div className="voice-reply-actions">{voiceReplyRecordingPostId === post.id ? <button type="button" className="follow-btn" onClick={(event) => { event.stopPropagation(); stopVoiceReplyRecording(post.id) }}>停止</button> : <button type="button" className="follow-btn" onClick={(event) => { event.stopPropagation(); void startVoiceReplyRecording(post.id) }} disabled={!isRecordSupported || !!voiceReplyRecordingPostId}>録音開始</button>}</div><button type="button" className={`compose-post-btn comment-submit-btn ${(voiceReplyBlobByPostId[post.id] && !voiceCommentPostingMap[post.id]) ? 'is-enabled' : 'is-disabled'}`} disabled={!voiceReplyBlobByPostId[post.id] || !!voiceCommentPostingMap[post.id]} onClick={(event) => { event.preventDefault(); event.stopPropagation(); void handleCreateVoiceComment(post.id) }}>{voiceCommentPostingMap[post.id] ? '送信中...' : '音声返信を送信'}</button>{voiceReplyNoticeByPostId[post.id] && <p className="status-message">{voiceReplyNoticeByPostId[post.id]}</p>}{voiceReplyErrorByPostId[post.id] && <p className="inline-error">{voiceReplyErrorByPostId[post.id]}</p>}{voiceReplySuccessByPostId[post.id] && <p className="status-message voice-reply-success">{voiceReplySuccessByPostId[post.id]}</p>}{!isRecordSupported && <p className="inline-error">このブラウザでは録音に対応していません</p>}</div>}{commentsErrorMap[post.id] && <p className="inline-error">{commentsErrorMap[post.id]}</p>}{commentsLoadingMap[post.id] && <p className="status-message">コメントを読み込み中...</p>}{!commentsLoadingMap[post.id] && comments.length === 0 && <p className="status-message">まだコメントはありません</p>}{!commentsLoadingMap[post.id] && comments.length > 0 && <div>{comments.map((comment) => { const isOwnComment = comment.user_id === session?.user.id; const myFallbackProfile = isOwnComment ? buildCurrentUserCommentProfile() : null; const cProfile = comment.profiles ?? comment.profile ?? comment.author ?? commentProfileMap[comment.user_id] ?? myFallbackProfile; const metadata = session?.user?.user_metadata ?? null; const emailLocalPart = session?.user?.email?.split('@')[0] ?? ''; const cName = cProfile?.display_name ?? cProfile?.username ?? (typeof (cProfile as Record<string, unknown> | null)?.full_name === 'string' ? String((cProfile as Record<string, unknown>).full_name) : '') ?? (typeof (metadata as Record<string, unknown> | null)?.display_name === 'string' ? String((metadata as Record<string, unknown>).display_name) : (typeof (metadata as Record<string, unknown> | null)?.full_name === 'string' ? String((metadata as Record<string, unknown>).full_name) : (typeof (metadata as Record<string, unknown> | null)?.name === 'string' ? String((metadata as Record<string, unknown>).name) : ''))) ?? emailLocalPart ?? 'friendcast user'; const commentBodyText = typeof comment.body === 'string' ? comment.body : ''; const commentLinkPreview = extractFirstUrl(commentBodyText); const isVoice = comment.comment_type === 'voice'; const isPlaying = playingVoiceCommentId === comment.id; const current = voiceCommentCurrentTimeById[comment.id] ?? 0; const duration = voiceCommentDurationById[comment.id] ?? comment.audio_duration_seconds ?? 0; const currentLabel = formatDurationSeconds(voiceCommentCurrentTimeById[comment.id] ?? (isPlaying ? 0 : null), '0:00'); const totalLabel = formatDurationSeconds((voiceCommentDurationById[comment.id] ?? comment.audio_duration_seconds ?? null), '--:--'); return <article key={comment.id} className={`discover-user-item comment-item ${isVoice ? 'comment-item-voice' : ''} ${isPlaying ? 'is-playing' : ''}`}><div className="discover-user-main"><button type="button" className="discover-avatar comment-profile-button" onClick={(event) => { event.stopPropagation(); if (!comment.user_id) return; goToProfile(comment.user_id) }} style={cProfile?.avatar_url ? { backgroundImage: `url(${cProfile.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}>{getAvatarInitial(cName)}</button><span className="discover-user-meta"><button type="button" className="comment-author-link" onClick={(event) => { event.stopPropagation(); if (!comment.user_id) return; goToProfile(comment.user_id) }}><strong>{cName}</strong></button><small>{formatDate(comment.created_at)}</small>{isVoice ? <span className="voice-comment-wrap"><small className="voice-comment-tag">🎙️ 音声返信</small>{comment.audio_url ? <span className={`voice-comment-player audio-card ${isPlaying ? 'is-active' : ''}`}><button type="button" className="audio-play" onClick={(event) => { event.stopPropagation(); void toggleVoiceCommentPlay(comment) }} aria-label={isPlaying ? '音声返信を停止' : '音声返信を再生'}>{isPlaying ? '⏸' : '▶'}</button><span className="audio-main"><button type="button" className={`audio-wave voice-comment-wave ${isPlaying ? 'playing' : ''}`} onClick={(event) => { event.stopPropagation(); if (!isPlaying) { void toggleVoiceCommentPlay(comment); return }; const rect = event.currentTarget.getBoundingClientRect(); const ratio = (event.clientX - rect.left) / rect.width; seekVoiceCommentToRatio(comment.id, Math.min(1, Math.max(0, ratio))) }} aria-label={isPlaying ? '波形をタップして再生位置を移動' : '音声返信を再生'}>{Array.from({ length: 18 }).map((_, i) => <i key={i} style={{ height: `${8 + ((i % 6) * 3)}px` }} className={duration > 0 && (current / duration) * 100 >= ((i + 1) / 18) * 100 ? 'is-past' : ''} />)}</button><div className="audio-meta-row voice-comment-meta"><small className="audio-duration voice-comment-time">{currentLabel} / {totalLabel}</small>{isPlaying && <small className="audio-playing-label voice-comment-live">再生中</small>}</div><div className="audio-seek-row voice-comment-controls"><button type="button" className="audio-seek-step" onClick={(event) => { event.stopPropagation(); if (!isPlaying) { void toggleVoiceCommentPlay(comment); return }; seekVoiceCommentBy(comment.id, -15) }}>-15秒</button><button type="button" className="audio-speed-btn" onClick={(event) => { event.stopPropagation(); cycleGlobalPlaybackRate() }} aria-label={`再生速度 ${audioPlaybackRate.toFixed(1)}倍`}>{audioPlaybackRate.toFixed(1)}x</button><button type="button" className="audio-seek-step" onClick={(event) => { event.stopPropagation(); if (!isPlaying) { void toggleVoiceCommentPlay(comment); return }; seekVoiceCommentBy(comment.id, 15) }}>+15秒</button></div></span></span> : <small>音声を読み込めません</small>}{commentBodyText && <span className="comment-body-text voice-comment-text">{renderTextWithLinks(commentBodyText, `comment-${comment.id}`)}</span>}{commentLinkPreview && <LinkPreviewCard link={commentLinkPreview} compact />}</span> : <span className="comment-body-wrap"><span className="comment-body-text">{renderTextWithLinks(commentBodyText, `comment-${comment.id}`)}</span>{commentLinkPreview && <LinkPreviewCard link={commentLinkPreview} compact />}</span>}</span></div>{isOwnComment && <button type="button" className="post-delete-btn comment-delete-btn" aria-label="コメントを削除" disabled={commentDeletingMap[comment.id]} onClick={(event) => { event.stopPropagation(); void handleDeleteComment(post.id, comment) }}>{commentDeletingMap[comment.id] ? '…' : '🗑️'}</button>}</article> })}</div>}</section>}</article> }
+const renderTimelinePost = (post: Post, options?: { compact?: boolean; showFollowButton?: boolean; repostMeta?: { repostedBy: Profile; repostedAt: string }; detailed?: boolean }) => { const compact = options?.compact ?? false; const detailed = options?.detailed ?? false; const showFollowButton = options?.showFollowButton ?? false; const repostMeta = options?.repostMeta; const authorProfile = resolvePostAuthor(post); const isOwnPost = post.user_id === session?.user.id; const displayName = authorProfile?.display_name ?? authorProfile?.username ?? 'friendcast user'; const isCommentsOpen = detailed || openedCommentsPostId === post.id; const comments = commentsByPostId[post.id] ?? []; const commentDraft = commentInputMap[post.id] ?? ''; const commentBody = commentDraft.trim(); const isCommentSubmitting = !!commentPostingMap[post.id]; const isVoiceReplyRecordingForPost = voiceReplyRecordingPostId === post.id; const canSubmitComment = !!session?.user && !!post.id && commentBody.length > 0 && commentBody.length <= 140 && !isCommentSubmitting && !isVoiceReplyRecordingForPost; const postLinkPreview = extractFirstUrl(post.text ?? ''); const canDownloadAudio = canDownloadOwnAudioPost(post); const isAudioDownloadPending = audioDownloadPendingPostId === post.id; return <article key={`${post.id}_${repostMeta?.repostedBy.id ?? 'post'}`} className={`post-card tweet-item ${detailed ? 'post-card-detail' : ''}`} role="article">{repostMeta && <button type="button" className="repost-meta" onClick={(event) => { event.stopPropagation(); goToProfile(repostMeta.repostedBy.id) }}>↻ {repostMeta.repostedBy.display_name ?? repostMeta.repostedBy.username}さんがリポストしました ・ {formatDate(repostMeta.repostedAt)}</button>}<div className="post-header"><button className="post-avatar tweet-avatar" onClick={(event) => { event.stopPropagation(); goToProfile(post.user_id) }} style={authorProfile?.avatar_url ? { backgroundImage: `url(${authorProfile.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}>{displayName.slice(0, 1)}</button><div className="post-header-main"><button className="tweet-header author-link tweet-author-link" onClick={(event) => { event.stopPropagation(); goToProfile(post.user_id) }} type="button"><div className="post-user-line"><span className="post-user-name">{displayName}</span></div></button><time className="post-date">{formatDate(post.created_at)}</time></div><div className="post-header-actions">{showFollowButton && !isOwnPost && <button className={`follow-btn ${isFollowing(post.user_id) ? 'is-following' : ''}`} disabled={isFollowPending(post.user_id)} onClick={() => void toggleFollow(post.user_id)} type="button">{isFollowPending(post.user_id) ? '処理中...' : (isFollowing(post.user_id) ? 'フォロー中' : 'フォロー')}</button>}{isOwnPost ? <div className="post-owner-actions"><button type="button" className="visibility-badge visibility-badge-button" onClick={(event) => { event.stopPropagation(); openVisibilityEditor(post) }}><span>{visibilityBadgeIcon[post.visibility]}</span><span>{visibilityComposeLabel[post.visibility]}</span></button><button className="post-delete-btn post-delete-button" type="button" aria-label="投稿を削除" disabled={deletingPostId === post.id} onClick={(event) => { event.stopPropagation(); void handleDeletePost(post) }}>{deletingPostId === post.id ? '…' : '🗑️'}</button></div> : <div className="visibility-badge"><span>{visibilityBadgeIcon[post.visibility]}</span><span>{visibilityComposeLabel[post.visibility]}</span></div>}</div></div><div className="post-content tweet-content">{post.text.trim() && <p className="post-text tweet-text post-text-multiline">{renderTextWithLinks(post.text, `post-${post.id}`)}</p>}{postLinkPreview && <LinkPreviewCard link={postLinkPreview} />}{renderAudioPlayer(post)}{postActionError[post.id] && <p className="inline-error">{postActionError[post.id]}</p>}{!compact && <p className="post-sub-text delivery-inline"><small>{audienceLabel[post.visibility]}に届きます</small></p>}</div><div className="post-actions action-row"><button className="icon-btn" onClick={(event) => { event.stopPropagation(); void toggleCommentsPanel(post.id) }}>💬 <span>{commentsCountMap[post.id] ?? 0}</span></button><button className={`icon-btn like-btn ${isLikedPost(post.id) ? 'active-icon liked' : ''}`} onClick={(event) => { event.stopPropagation(); void togglePostLike(post.id) }} disabled={isLikePending(post.id)} aria-pressed={isLikedPost(post.id)}>{isLikedPost(post.id) ? '♥' : '♡'} <span>{likesCountMap[post.id] ?? 0}</span></button><button className={`icon-btn bookmark-btn ${isPostBookmarked(post.id) ? 'active-icon liked' : ''}`} onClick={(event) => { event.stopPropagation(); void toggleBookmarkPost(post.id) }} aria-pressed={isPostBookmarked(post.id)} aria-label={isPostBookmarked(post.id) ? 'あとで聴くから削除' : 'あとで聴くに保存'}><svg viewBox="0 0 24 24" className="bookmark-icon" aria-hidden="true"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z" fill={isPostBookmarked(post.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg></button>{canDownloadAudio && <button className="icon-btn audio-download-btn" type="button" onClick={(event) => { event.stopPropagation(); void handleDownloadOwnAudio(post) }} disabled={isAudioDownloadPending} aria-label="自分の音声をダウンロード" title="音声を保存"><span aria-hidden="true">⬇️</span><span className="audio-download-label">音声を保存</span></button>}</div>{isCommentsOpen && <section className="comments-panel"><div className="comment-reply-tabs"><button type="button" className={`comment-reply-tab ${(commentReplyModeByPostId[post.id] ?? 'text') === 'text' ? 'active-tab' : ''}`} onClick={(event) => { event.stopPropagation(); setCommentReplyModeByPostId((prev) => ({ ...prev, [post.id]: 'text' })) }}>テキスト</button><button type="button" className={`comment-reply-tab ${(commentReplyModeByPostId[post.id] ?? 'text') === 'voice' ? 'active-tab' : ''}`} onClick={(event) => { event.stopPropagation(); setCommentReplyModeByPostId((prev) => ({ ...prev, [post.id]: 'voice' })) }}>音声</button></div>{(commentReplyModeByPostId[post.id] ?? 'text') === 'text' ? <div className="comment-input-row"><textarea maxLength={140} value={commentDraft} onChange={(event) => setCommentInputMap((prev) => ({ ...prev, [post.id]: event.target.value }))} placeholder="コメントを書く..." className="compose-textarea" rows={2} /><div className="compose-sticky-action"><p className="compose-counter">{commentDraft.length} / 140</p><button className={`compose-post-btn comment-submit-btn ${canSubmitComment ? 'is-enabled' : 'is-disabled'}`} type="button" disabled={!canSubmitComment} aria-disabled={!canSubmitComment} onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (isVoiceReplyRecordingForPost) return; void handleCreateComment(post.id) }}>{isCommentSubmitting ? '送信中...' : '送信'}</button></div></div> : <div className="voice-reply-panel"><p className="status-message">音声で返信（最大20分）</p><p className="status-message">{voiceReplyRecordingPostId === post.id ? `録音中：${formatRecordingTimer(voiceReplyRecordingSecondsByPostId[post.id] ?? 0)} / ${formatRecordingTimer(MAX_BROWSER_RECORDING_SECONDS)}` : (voiceReplyBlobByPostId[post.id] ? `録音済み：${formatDuration(voiceReplyDurationByPostId[post.id] ?? 0)}` : 'まだ録音されていません')}</p>{voiceReplyRecordingPostId === post.id && (voiceReplyRecordingSecondsByPostId[post.id] ?? 0) >= BROWSER_RECORDING_WARNING_SECONDS && <p className="record-limit-warning">まもなく録音上限の20分です。</p>}{voiceReplyPreviewUrlByPostId[post.id] && <div className="voice-reply-preview-box"><p className="voice-reply-preview-time">{formatDuration((voiceReplyPreviewCurrentTimeByPostId[post.id] ?? 0) * 1000)} / {formatDuration(voiceReplyDurationByPostId[post.id] ?? 0)}</p><div className="voice-reply-actions"><button type="button" className="follow-btn" onClick={(event) => { event.stopPropagation(); void playVoiceReplyPreview(post.id) }}>{voiceReplyPreviewPlayingPostId === post.id ? '停止' : '▶ 再生'}</button><button type="button" className="soft-action-button" onClick={(event) => { event.stopPropagation(); clearVoiceReplyForPost(post.id) }} disabled={voiceReplyRecordingPostId === post.id}>再録音</button></div></div>}<div className="voice-reply-actions">{voiceReplyRecordingPostId === post.id ? <button type="button" className="follow-btn" onClick={(event) => { event.stopPropagation(); stopVoiceReplyRecording(post.id) }}>停止</button> : <button type="button" className="follow-btn" onClick={(event) => { event.stopPropagation(); void startVoiceReplyRecording(post.id) }} disabled={!isRecordSupported || !!voiceReplyRecordingPostId}>録音開始</button>}</div><button type="button" className={`compose-post-btn comment-submit-btn ${(voiceReplyBlobByPostId[post.id] && !voiceCommentPostingMap[post.id]) ? 'is-enabled' : 'is-disabled'}`} disabled={!voiceReplyBlobByPostId[post.id] || !!voiceCommentPostingMap[post.id]} onClick={(event) => { event.preventDefault(); event.stopPropagation(); void handleCreateVoiceComment(post.id) }}>{voiceCommentPostingMap[post.id] ? '送信中...' : '音声返信を送信'}</button>{voiceReplyNoticeByPostId[post.id] && <p className="status-message">{voiceReplyNoticeByPostId[post.id]}</p>}{voiceReplyErrorByPostId[post.id] && <p className="inline-error">{voiceReplyErrorByPostId[post.id]}</p>}{voiceReplySuccessByPostId[post.id] && <p className="status-message voice-reply-success">{voiceReplySuccessByPostId[post.id]}</p>}{!isRecordSupported && <p className="inline-error">このブラウザでは録音に対応していません</p>}</div>}{commentsErrorMap[post.id] && <p className="inline-error">{commentsErrorMap[post.id]}</p>}{commentsLoadingMap[post.id] && <p className="status-message">コメントを読み込み中...</p>}{!commentsLoadingMap[post.id] && comments.length === 0 && <p className="status-message">まだコメントはありません</p>}{!commentsLoadingMap[post.id] && comments.length > 0 && <div>{comments.map((comment) => { const isOwnComment = comment.user_id === session?.user.id; const myFallbackProfile = isOwnComment ? buildCurrentUserCommentProfile() : null; const cProfile = comment.profiles ?? comment.profile ?? comment.author ?? commentProfileMap[comment.user_id] ?? myFallbackProfile; const metadata = session?.user?.user_metadata ?? null; const emailLocalPart = session?.user?.email?.split('@')[0] ?? ''; const cName = cProfile?.display_name ?? cProfile?.username ?? (typeof (cProfile as Record<string, unknown> | null)?.full_name === 'string' ? String((cProfile as Record<string, unknown>).full_name) : '') ?? (typeof (metadata as Record<string, unknown> | null)?.display_name === 'string' ? String((metadata as Record<string, unknown>).display_name) : (typeof (metadata as Record<string, unknown> | null)?.full_name === 'string' ? String((metadata as Record<string, unknown>).full_name) : (typeof (metadata as Record<string, unknown> | null)?.name === 'string' ? String((metadata as Record<string, unknown>).name) : ''))) ?? emailLocalPart ?? 'friendcast user'; const commentBodyText = typeof comment.body === 'string' ? comment.body : ''; const commentLinkPreview = extractFirstUrl(commentBodyText); const isVoice = comment.comment_type === 'voice'; const isPlaying = playingVoiceCommentId === comment.id; const current = voiceCommentCurrentTimeById[comment.id] ?? 0; const duration = voiceCommentDurationById[comment.id] ?? comment.audio_duration_seconds ?? 0; const currentLabel = formatDurationSeconds(voiceCommentCurrentTimeById[comment.id] ?? (isPlaying ? 0 : null), '0:00'); const totalLabel = formatDurationSeconds((voiceCommentDurationById[comment.id] ?? comment.audio_duration_seconds ?? null), '--:--'); return <article key={comment.id} className={`discover-user-item comment-item ${isVoice ? 'comment-item-voice' : ''} ${isPlaying ? 'is-playing' : ''}`}><div className="discover-user-main"><button type="button" className="discover-avatar comment-profile-button" onClick={(event) => { event.stopPropagation(); if (!comment.user_id) return; goToProfile(comment.user_id) }} style={cProfile?.avatar_url ? { backgroundImage: `url(${cProfile.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}>{getAvatarInitial(cName)}</button><span className="discover-user-meta"><button type="button" className="comment-author-link" onClick={(event) => { event.stopPropagation(); if (!comment.user_id) return; goToProfile(comment.user_id) }}><strong>{cName}</strong></button><small>{formatDate(comment.created_at)}</small>{isVoice ? <span className="voice-comment-wrap"><small className="voice-comment-tag">🎙️ 音声返信</small>{comment.audio_url ? <span className={`voice-comment-player audio-card ${isPlaying ? 'is-active' : ''}`}><button type="button" className="audio-play" onClick={(event) => { event.stopPropagation(); void toggleVoiceCommentPlay(comment) }} aria-label={isPlaying ? '音声返信を停止' : '音声返信を再生'}>{isPlaying ? '⏸' : '▶'}</button><span className="audio-main"><button type="button" className={`audio-wave voice-comment-wave ${isPlaying ? 'playing' : ''}`} onClick={(event) => { event.stopPropagation(); markAudioDebugPressed(`comment:${comment.id}`, 'comment', 'seek-ratio', isPlaying ? voiceCommentAudioRef.current : null, `isPlaying=${isPlaying}`); if (!isPlaying) { void toggleVoiceCommentPlay(comment); return }; const rect = event.currentTarget.getBoundingClientRect(); const ratio = (event.clientX - rect.left) / rect.width; seekVoiceCommentToRatio(comment.id, Math.min(1, Math.max(0, ratio))) }} aria-label={isPlaying ? '波形をタップして再生位置を移動' : '音声返信を再生'}>{Array.from({ length: 18 }).map((_, i) => <i key={i} style={{ height: `${8 + ((i % 6) * 3)}px` }} className={duration > 0 && (current / duration) * 100 >= ((i + 1) / 18) * 100 ? 'is-past' : ''} />)}</button><div className="audio-meta-row voice-comment-meta"><small className="audio-duration voice-comment-time">{currentLabel} / {totalLabel}</small>{isPlaying && <small className="audio-playing-label voice-comment-live">再生中</small>}</div><div className="audio-seek-row voice-comment-controls"><button type="button" className="audio-seek-step" onClick={(event) => { event.stopPropagation(); markAudioDebugPressed(`comment:${comment.id}`, 'comment', 'back-15', isPlaying ? voiceCommentAudioRef.current : null, `isPlaying=${isPlaying}`); if (!isPlaying) { void toggleVoiceCommentPlay(comment); return }; seekVoiceCommentBy(comment.id, -15) }}>-15秒</button><button type="button" className="audio-speed-btn" onClick={(event) => { event.stopPropagation(); cycleGlobalPlaybackRate() }} aria-label={`再生速度 ${audioPlaybackRate.toFixed(1)}倍`}>{audioPlaybackRate.toFixed(1)}x</button><button type="button" className="audio-seek-step" onClick={(event) => { event.stopPropagation(); markAudioDebugPressed(`comment:${comment.id}`, 'comment', 'forward-15', isPlaying ? voiceCommentAudioRef.current : null, `isPlaying=${isPlaying}`); if (!isPlaying) { void toggleVoiceCommentPlay(comment); return }; seekVoiceCommentBy(comment.id, 15) }}>+15秒</button></div><div className="audio-seek-debug">{formatAudioSeekDebug(audioSeekDebugById[`comment:${comment.id}`] ?? buildDefaultAudioSeekDebugEntry('comment', `comment:${comment.id}`, isPlaying ? voiceCommentAudioRef.current : null, `isPlaying=${isPlaying}`))}</div></span></span> : <small>音声を読み込めません</small>}{commentBodyText && <span className="comment-body-text voice-comment-text">{renderTextWithLinks(commentBodyText, `comment-${comment.id}`)}</span>}{commentLinkPreview && <LinkPreviewCard link={commentLinkPreview} compact />}</span> : <span className="comment-body-wrap"><span className="comment-body-text">{renderTextWithLinks(commentBodyText, `comment-${comment.id}`)}</span>{commentLinkPreview && <LinkPreviewCard link={commentLinkPreview} compact />}</span>}</span></div>{isOwnComment && <button type="button" className="post-delete-btn comment-delete-btn" aria-label="コメントを削除" disabled={commentDeletingMap[comment.id]} onClick={(event) => { event.stopPropagation(); void handleDeleteComment(post.id, comment) }}>{commentDeletingMap[comment.id] ? '…' : '🗑️'}</button>}</article> })}</div>}</section>}</article> }
 
 const renderUnreadBoundary = () => (
   <div className="unread-posts-divider" role="separator" aria-label="ここから未読の投稿です">
