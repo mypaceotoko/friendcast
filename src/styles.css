@@ -1400,27 +1400,6 @@ main.screen{padding-bottom:calc(108px + env(safe-area-inset-bottom));}
   white-space:nowrap;
 }
 
-.audio-seek-debug{
-  width:100%;
-  max-width:100%;
-  box-sizing:border-box;
-  margin-top:4px;
-  padding:4px 6px;
-  border-radius:8px;
-  background:rgba(0,0,0,.06);
-  color:#4a4a4a;
-  font-family:monospace;
-  font-size:10px;
-  line-height:1.4;
-  word-break:break-all;
-  white-space:pre-line;
-}
-.theme-dark .audio-seek-debug,
-body[data-theme="dark"] .audio-seek-debug{
-  background:rgba(255,255,255,.08);
-  color:#cbd5e1;
-}
-
 .friend-suggestions{
   margin: 10px 0 14px;
   padding: 12px;
